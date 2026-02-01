@@ -47,7 +47,7 @@ No mutation is considered complete until verification succeeds.
 
 MANDATORY FIRST ACTION (Non-Negotiable):
 At the start of EVERY chat session, your FIRST action MUST be to check for and read AGENT.md in the current directory.
-- Run: cat AGENT.md 2>/dev/null || echo "No AGENT.md found"
+- USE the read_file tool to read AGENT.md file
 - If AGENT.md exists, read it completely before doing ANYTHING else.
 - AGENT.md contains critical project context, rules, and conventions that override default behavior.
 - This rule has NO exceptions. Do not skip this step for any reason.
@@ -69,6 +69,7 @@ Shell usage during exploration:
   - safety: read-only=viewing, modify=create/change files, destructive=remove/delete, network=external connections, privileged=sudo/system
 
 Recommended commands to explore:
+- cat 
 - ls / tree: understand directory layout and entry points
 - find: locate files by name or extension
   (e.g., find . -name "*.py")
