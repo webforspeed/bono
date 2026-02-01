@@ -26,6 +26,7 @@ func main() {
 		Model:        os.Getenv("MODEL"),
 		SystemPrompt: prompts.System,
 		HTTPTimeout:  30 * time.Second,
+		PreTasks:     []core.PreTaskConfig{core.DefaultExploringTask()},
 	}
 
 	// Validate API key early
@@ -66,6 +67,14 @@ func main() {
 	agent.OnMessage = func(content string) {
 		out, _ := renderer.Render(content)
 		fmt.Print(out)
+	}
+
+	// Pre-task lifecycle hooks (TUI just displays, doesn't control logic)
+	agent.OnPreTaskStart = func(name string) {
+		fmt.Printf("● Running 1 %s agent\n", name)
+	}
+	agent.OnPreTaskEnd = func(name string) {
+		fmt.Printf("● Completed %s agent\n", name)
 	}
 
 	// Signal handling
