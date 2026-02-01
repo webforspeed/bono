@@ -6,15 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
-	"github.com/charmbracelet/glamour"
+	tea "github.com/charmbracelet/bubbletea"
 	core "github.com/webforspeed/bono-core"
 	"github.com/webforspeed/bono/prompts"
-	"golang.org/x/term"
+	"github.com/webforspeed/bono/tui"
 )
 
 func main() {
@@ -31,120 +29,76 @@ func main() {
 
 	// Validate API key early
 	if config.APIKey == "" {
-		panic("OPENROUTER_API_KEY required")
+		fmt.Println("Error: OPENROUTER_API_KEY required")
+		os.Exit(1)
 	}
 
 	// Load tools
 	toolsData, err := os.ReadFile("tools.json")
 	if err != nil {
-		panic(err)
+		fmt.Printf("Error loading tools.json: %v\n", err)
+		os.Exit(1)
 	}
 	json.Unmarshal(toolsData, &config.Tools)
 
 	// Create agent
 	agent, err := core.NewAgent(config)
 	if err != nil {
-		panic(err)
+		fmt.Printf("Error creating agent: %v\n", err)
+		os.Exit(1)
 	}
 
-	// Set up TUI hooks
-	renderer, _ := glamour.NewTermRenderer(glamour.WithAutoStyle(), glamour.WithWordWrap(0))
+	// Create context
+	ctx := context.Background()
 
+	// Create TUI model
+	model := tui.New(agent, ctx)
+
+	// Create Bubble Tea program (using standard buffer, not alt screen)
+	p := tea.NewProgram(model)
+
+	// Set up agent hooks to send messages to TUI
 	agent.OnToolCall = func(name string, args map[string]any) bool {
 		if name == "read_file" {
-			fmt.Printf("● Read('%s') ", args["path"])
-			return true // auto-approve reads
+			// Auto-approve reads
+			p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Approved: nil})
+			return true
 		}
-		fmt.Printf("● %s [Enter/Esc] ", formatTool(name, args))
-		return getch() != 0x1b
+
+		// Create channel and wait for TUI approval
+		approved := make(chan bool, 1)
+		p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Approved: approved})
+
+		// Block until user approves (Enter) or rejects (Esc), or context cancelled
+		select {
+		case result := <-approved:
+			return result
+		case <-ctx.Done():
+			return false
+		}
 	}
 
 	agent.OnToolDone = func(name string, args map[string]any, result core.ToolResult) {
-		prompt := formatToolDone(name, args)
-		fmt.Printf("\r● %s => %s%s\n", prompt, result.Status, strings.Repeat(" ", 40))
+		p.Send(tui.AgentToolDoneMsg{Name: name, Args: args, Status: result.Status})
 	}
 
 	agent.OnMessage = func(content string) {
-		out, _ := renderer.Render(content)
-		fmt.Print(out)
+		p.Send(tui.AgentMessageMsg(content))
 	}
 
-	// Pre-task lifecycle hooks (TUI just displays, doesn't control logic)
 	agent.OnPreTaskStart = func(name string) {
-		fmt.Printf("● Running 1 %s agent\n", name)
+		p.Send(tui.AgentPreTaskStartMsg(name))
 	}
+
 	agent.OnPreTaskEnd = func(name string) {
-		fmt.Printf("● Completed %s agent\n", name)
+		p.Send(tui.AgentPreTaskEndMsg(name))
 	}
 
-	// Signal handling
-	ctx, cancel := context.WithCancel(context.Background())
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT)
-	go func() {
-		<-sigChan
-		cancel()
-		fmt.Println("\nSee you later, alligator!")
-		os.Exit(0)
-	}()
-
-	// Main loop (TUI controls the loop, not core)
-	scanner := bufio.NewScanner(os.Stdin)
-	for {
-		fmt.Print("> ")
-		if !scanner.Scan() {
-			break
-		}
-		input := scanner.Text()
-		if input == "" {
-			continue
-		}
-		if _, err := agent.Chat(ctx, input); err != nil {
-			fmt.Println("Error:", err)
-		}
+	// Run the TUI
+	if _, err := p.Run(); err != nil {
+		fmt.Printf("Error running TUI: %v\n", err)
+		os.Exit(1)
 	}
-}
-
-func formatTool(name string, args map[string]any) string {
-	switch name {
-	case "read_file":
-		return fmt.Sprintf("Read('%s')", args["path"])
-	case "write_file":
-		content, _ := args["content"].(string)
-		lines := len(strings.Split(content, "\n"))
-		return fmt.Sprintf("Write('%s', %d lines)", args["path"], lines)
-	case "edit_file":
-		return fmt.Sprintf("Edit('%s')", args["path"])
-	case "run_shell":
-		cmd, _ := args["command"].(string)
-		desc, _ := args["description"].(string)
-		safety, _ := args["safety"].(string)
-		if desc == "" {
-			desc = "(no description)"
-		}
-		if safety == "" {
-			safety = "modify"
-		}
-		return fmt.Sprintf("Bash('%s') # %s, %s", cmd, desc, safety)
-	default:
-		return name
-	}
-}
-
-func formatToolDone(name string, args map[string]any) string {
-	// Reuse formatTool to keep the full prompt (including description)
-	return formatTool(name, args)
-}
-
-func getch() byte {
-	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
-	if err != nil {
-		return 0
-	}
-	defer term.Restore(int(os.Stdin.Fd()), oldState)
-	b := make([]byte, 1)
-	os.Stdin.Read(b)
-	return b[0]
 }
 
 func loadEnv() {

@@ -1,6 +1,8 @@
-# Bono
+# Bono - By Webforspeed
 
-Terminal-based autonomous coding agent for reading, writing, and editing files directly from your command line.
+Bono is a terminal-based AI coding agent (like Claude Code or Cursor) that autonomously reads, writes, edits, and manages code, runs shell commands, and helps automate complex development workflows—all from your command line.
+
+![Bono Screenshot](docs/screenshot.png)
 
 ## Features
 
