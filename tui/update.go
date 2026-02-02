@@ -170,15 +170,56 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case AgentSubagentToolCallMsg:
 		cmd, _ := msg.Args["command"].(string)
+		desc, _ := msg.Args["description"].(string)
+		safety, _ := msg.Args["safety"].(string)
+		// Soft wrap to viewport width using lipgloss
+		wrapWidth := m.width - 2
+		if wrapWidth < 40 {
+			wrapWidth = 40
+		}
+		wrapStyle := lipgloss.NewStyle().Width(wrapWidth)
 		// Subagent tools always require approval
-		m.AppendRawMessage(fmt.Sprintf("  ↳ Bash(%s) [Enter/Esc]", cmd))
+		// Show description and safety if available (from parent run_shell call)
+		var displayStr string
+		if desc != "" || safety != "" {
+			if desc == "" {
+				desc = "(no description)"
+			}
+			if safety == "" {
+				safety = "modify"
+			}
+			displayStr = fmt.Sprintf("  ↳ Bash(%s) # %s, %s [Enter/Esc]", cmd, desc, safety)
+		} else {
+			displayStr = fmt.Sprintf("  ↳ Bash(%s) [Enter/Esc]", cmd)
+		}
+		m.AppendRawMessage(wrapStyle.Render(displayStr))
 		m.pendingSubagentApproval = &msg
 		m.spinnerBar.SetText("Waiting for subagent approval...")
 
 	case AgentSubagentToolDoneMsg:
 		cmd, _ := msg.Args["command"].(string)
+		desc, _ := msg.Args["description"].(string)
+		safety, _ := msg.Args["safety"].(string)
+		// Soft wrap to viewport width using lipgloss
+		wrapWidth := m.width - 2
+		if wrapWidth < 40 {
+			wrapWidth = 40
+		}
+		wrapStyle := lipgloss.NewStyle().Width(wrapWidth)
 		if len(m.messages) > 0 {
-			m.messages[len(m.messages)-1] = fmt.Sprintf("  ↳ Bash(%s) => %s", cmd, msg.Status)
+			var displayStr string
+			if desc != "" || safety != "" {
+				if desc == "" {
+					desc = "(no description)"
+				}
+				if safety == "" {
+					safety = "modify"
+				}
+				displayStr = fmt.Sprintf("  ↳ Bash(%s) # %s, %s => %s", cmd, desc, safety, msg.Status)
+			} else {
+				displayStr = fmt.Sprintf("  ↳ Bash(%s) => %s", cmd, msg.Status)
+			}
+			m.messages[len(m.messages)-1] = wrapStyle.Render(displayStr)
 			m.updateViewportContent()
 		}
 
