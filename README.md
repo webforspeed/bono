@@ -17,7 +17,7 @@ Bono is a terminal-based AI coding agent (like Claude Code or Cursor) that auton
 - [ ] MCP tool integrations
 - [ ] Slash commands (built-in + user-defined)
 - [ ] Plan mode (preview and approve steps before execution)
-- [ ] Sub-agents (delegate subtasks to child agents)
+- [x] Sub-agents (delegate subtasks to child agents)
 - [ ] Parallel tool execution (concurrent tool calls)
 
 ## Dependencies
@@ -77,6 +77,7 @@ Sub-agents are specialized agents that handle specific tasks independently. They
 | Sub-agent | Description |
 |-----------|-------------|
 | Explore | Analyzes the codebase and generates an `AGENT.md` file with project structure, conventions, and patterns |
+| Shell | Executes shell commands, analyzes output per custom instructions, and returns only relevant information. Can run follow-up commands autonomously to complete its task |
 
 ### Tool Confirmations
 
@@ -100,6 +101,8 @@ Sub-agents are specialized agents that handle specific tasks independently. They
 What makes this different from other open source agents:
 
 - **Self-documenting**: The agent automatically creates and maintains an `AGENT.md` file with project context. This runs as a separate sub-agent with its own context window, so the main agent doesn't suffer from context rot as the conversation grows.
+
+- **Shell commands are sub-agents**: Every shell command runs through a dedicated sub-agent with its own context. The main agent provides instructions on what to extract, and the shell sub-agent handles execution, analyzes potentially verbose output, and returns only the relevant information. This keeps build logs, git diffs, and other noisy output from bloating the main context window.
 
 - **Hook-based architecture**: The core agent exposes hooks (`OnToolCall`, `OnToolDone`, `OnMessage`, etc.), making it easy to build any frontend on top—this TUI is just one example.
 
