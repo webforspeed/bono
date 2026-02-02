@@ -23,6 +23,29 @@ type AgentPreTaskStartMsg string
 // AgentPreTaskEndMsg is sent when a pre-task agent completes.
 type AgentPreTaskEndMsg string
 
+// AgentShellSubagentStartMsg is sent when a shell subagent starts execution.
+// Contains the system prompt that defines the subagent's behavior.
+type AgentShellSubagentStartMsg string
+
+// AgentShellSubagentEndMsg is sent when a shell subagent completes.
+type AgentShellSubagentEndMsg struct {
+	Status string
+}
+
+// AgentSubagentToolCallMsg is sent when a subagent wants to call a tool.
+type AgentSubagentToolCallMsg struct {
+	Name     string
+	Args     map[string]any
+	Approved chan bool // TUI sends approval here
+}
+
+// AgentSubagentToolDoneMsg is sent when a subagent tool call completes.
+type AgentSubagentToolDoneMsg struct {
+	Name   string
+	Args   map[string]any
+	Status string
+}
+
 // AgentErrorMsg is sent when an error occurs during agent processing.
 type AgentErrorMsg struct {
 	Err error

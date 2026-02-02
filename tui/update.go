@@ -42,11 +42,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.Type {
 		case tea.KeyEnter:
-			// If pending tool approval, approve it
+			// If pending main agent tool approval, approve it
 			if m.pendingApproval != nil {
 				m.pendingApproval.Approved <- true
 				m.pendingApproval = nil
 				m.spinnerBar.SetText("Thinking...")
+				return m, nil
+			}
+			// If pending subagent tool approval, approve it
+			if m.pendingSubagentApproval != nil {
+				m.pendingSubagentApproval.Approved <- true
+				m.pendingSubagentApproval = nil
+				m.spinnerBar.SetText("Running subagent...")
 				return m, nil
 			}
 			// If slash modal is active and Enter is pressed, select the command
@@ -54,6 +61,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if cmd := m.slashModal.SelectedCommand(); cmd != nil {
 					m.input.SetValue("/" + cmd.Name)
 					m.slashModal.Update("") // Deactivate modal
+					m.recalculateLayout()
 					return m, nil
 				}
 			}
@@ -66,10 +74,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.pendingApproval.Approved <- false
 				m.pendingApproval = nil
 			}
+			if m.pendingSubagentApproval != nil {
+				m.pendingSubagentApproval.Approved <- false
+				m.pendingSubagentApproval = nil
+			}
 			return m, tea.Quit
 
 		case tea.KeyEsc:
-			// If pending tool approval, reject it
+			// If pending main agent tool approval, reject it
 			if m.pendingApproval != nil {
 				m.pendingApproval.Approved <- false
 				m.pendingApproval = nil
@@ -81,8 +93,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
+			// If pending subagent tool approval, reject it
+			if m.pendingSubagentApproval != nil {
+				m.pendingSubagentApproval.Approved <- false
+				m.pendingSubagentApproval = nil
+				m.spinnerBar.SetText("Running subagent...")
+				// Update the message to show cancelled
+				if len(m.messages) > 0 {
+					m.messages[len(m.messages)-1] = strings.TrimSuffix(m.messages[len(m.messages)-1], " [Enter/Esc]") + " => cancelled"
+					m.updateViewportContent()
+				}
+				return m, nil
+			}
 			if m.slashModal.IsActive() {
 				m.slashModal.Update("") // Deactivate modal
+				m.recalculateLayout()
 				return m, nil
 			}
 			return m, tea.Quit
@@ -132,6 +157,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AgentPreTaskEndMsg:
 		m.AppendRawMessage(fmt.Sprintf("● Completed %s agent", string(msg)))
 
+	case AgentShellSubagentStartMsg:
+		// Display subagent with truncated system prompt
+		prompt := string(msg)
+		if len(prompt) > 60 {
+			prompt = prompt[:57] + "..."
+		}
+		m.AppendRawMessage(fmt.Sprintf("● Subagent('%s')", prompt))
+
+	case AgentShellSubagentEndMsg:
+		m.AppendRawMessage(fmt.Sprintf("  ↳ Subagent completed (%s)", msg.Status))
+
+	case AgentSubagentToolCallMsg:
+		cmd, _ := msg.Args["command"].(string)
+		// Subagent tools always require approval
+		m.AppendRawMessage(fmt.Sprintf("  ↳ Bash(%s) [Enter/Esc]", cmd))
+		m.pendingSubagentApproval = &msg
+		m.spinnerBar.SetText("Waiting for subagent approval...")
+
+	case AgentSubagentToolDoneMsg:
+		cmd, _ := msg.Args["command"].(string)
+		if len(m.messages) > 0 {
+			m.messages[len(m.messages)-1] = fmt.Sprintf("  ↳ Bash(%s) => %s", cmd, msg.Status)
+			m.updateViewportContent()
+		}
+
 	case AgentErrorMsg:
 		m.AppendRawMessage(fmt.Sprintf("Error: %v", msg.Err))
 
@@ -158,6 +208,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Update slash modal based on current input value
 		m.slashModal.Update(m.input.Value())
+		m.recalculateLayout()
 	}
 
 	// Update viewport with all messages

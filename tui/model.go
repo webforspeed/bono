@@ -38,7 +38,8 @@ type Model struct {
 	processing    bool // true when agent is processing
 
 	// Tool approval state
-	pendingApproval *AgentToolCallMsg // current tool awaiting Enter/Esc
+	pendingApproval         *AgentToolCallMsg         // current main agent tool awaiting Enter/Esc
+	pendingSubagentApproval *AgentSubagentToolCallMsg // current subagent tool awaiting Enter/Esc
 }
 
 // New creates a new TUI Model with the given agent and context.
@@ -105,6 +106,33 @@ func (m *Model) updateViewportContent() {
 	m.viewport.GotoBottom()
 }
 
+// recalculateLayout recomputes component sizes based on current dimensions.
+func (m *Model) recalculateLayout() {
+	if !m.ready {
+		return
+	}
+
+	// Calculate heights
+	spinnerHeight := 1 // Spinner bar above input
+	inputHeight := 3   // Input box with border
+	statusHeight := 1  // Status bar
+	slashHeight := m.slashModal.Height()
+
+	// Set component widths
+	m.spinnerBar.SetWidth(m.width)
+	m.input.SetWidth(m.width, m.styles.InputBox)
+	m.statusBar.SetWidth(m.width)
+	m.slashModal.SetWidth(m.width)
+
+	// Viewport gets remaining space
+	m.viewport.Width = m.width
+	height := m.height - spinnerHeight - inputHeight - statusHeight - slashHeight
+	if height < 1 {
+		height = 1
+	}
+	m.viewport.Height = height
+}
+
 // ClearMessages clears all messages from the viewport.
 func (m *Model) ClearMessages() {
 	m.messages = []string{}
@@ -163,21 +191,7 @@ func (m *Model) handleResize(msg tea.WindowSizeMsg) {
 	m.height = msg.Height
 	m.ready = true
 
-	// Calculate heights
-	spinnerHeight := 1 // Spinner bar above input
-	inputHeight := 3   // Input box with border
-	statusHeight := 1  // Status bar
-	slashHeight := m.slashModal.Height()
-
-	// Set component widths
-	m.spinnerBar.SetWidth(msg.Width)
-	m.input.SetWidth(msg.Width, m.styles.InputBox)
-	m.statusBar.SetWidth(msg.Width)
-	m.slashModal.SetWidth(msg.Width)
-
-	// Viewport gets remaining space
-	m.viewport.Width = msg.Width
-	m.viewport.Height = msg.Height - spinnerHeight - inputHeight - statusHeight - slashHeight
+	m.recalculateLayout()
 
 	// Note: We don't recreate the glamour renderer on resize because
 	// glamour.WithAutoStyle() queries the terminal and causes garbage input.

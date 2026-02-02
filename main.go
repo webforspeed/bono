@@ -54,11 +54,16 @@ func main() {
 	// Create TUI model
 	model := tui.New(agent, ctx)
 
-	// Create Bubble Tea program (using standard buffer, not alt screen)
-	p := tea.NewProgram(model)
+	// Create Bubble Tea program (use alt screen for full viewport)
+	p := tea.NewProgram(model, tea.WithAltScreen())
 
 	// Set up agent hooks to send messages to TUI
 	agent.OnToolCall = func(name string, args map[string]any) bool {
+		// Skip display for run_shell - subagent hooks handle it
+		if name == "run_shell" {
+			return true // auto-approve, subagent will ask for each command
+		}
+
 		if name == "read_file" {
 			// Auto-approve reads
 			p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Approved: nil})
@@ -79,6 +84,10 @@ func main() {
 	}
 
 	agent.OnToolDone = func(name string, args map[string]any, result core.ToolResult) {
+		// Skip for run_shell - subagent hooks handle it
+		if name == "run_shell" {
+			return
+		}
 		p.Send(tui.AgentToolDoneMsg{Name: name, Args: args, Status: result.Status})
 	}
 
@@ -92,6 +101,32 @@ func main() {
 
 	agent.OnPreTaskEnd = func(name string) {
 		p.Send(tui.AgentPreTaskEndMsg(name))
+	}
+
+	agent.OnShellSubagentStart = func(systemPrompt string) {
+		p.Send(tui.AgentShellSubagentStartMsg(systemPrompt))
+	}
+
+	agent.OnShellSubagentEnd = func(result core.ToolResult) {
+		p.Send(tui.AgentShellSubagentEndMsg{Status: result.Status})
+	}
+
+	agent.OnSubagentToolCall = func(name string, args map[string]any) bool {
+		// All subagent tools require approval
+		approved := make(chan bool, 1)
+		p.Send(tui.AgentSubagentToolCallMsg{Name: name, Args: args, Approved: approved})
+
+		// Block until user approves (Enter) or rejects (Esc), or context cancelled
+		select {
+		case result := <-approved:
+			return result
+		case <-ctx.Done():
+			return false
+		}
+	}
+
+	agent.OnSubagentToolDone = func(name string, args map[string]any, result core.ToolResult) {
+		p.Send(tui.AgentSubagentToolDoneMsg{Name: name, Args: args, Status: result.Status})
 	}
 
 	// Run the TUI
