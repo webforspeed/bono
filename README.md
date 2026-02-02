@@ -70,6 +70,14 @@ On the first chat message, an exploring agent automatically runs to analyze your
 
 The main agent reads `AGENT.md` at the start of each session to understand your project context.
 
+## Sub-agents
+
+Sub-agents are specialized agents that handle specific tasks independently. They run with their own context window, keeping the main agent's context clean.
+
+| Sub-agent | Description |
+|-----------|-------------|
+| Explore | Analyzes the codebase and generates an `AGENT.md` file with project structure, conventions, and patterns |
+
 ### Tool Confirmations
 
 | Tool | Confirmation |
