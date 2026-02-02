@@ -34,16 +34,27 @@ type AgentShellSubagentEndMsg struct {
 
 // AgentSubagentToolCallMsg is sent when a subagent wants to call a tool.
 type AgentSubagentToolCallMsg struct {
-	Name     string
-	Args     map[string]any
-	Approved chan bool // TUI sends approval here
+	Name          string
+	Args          map[string]any
+	Approved      chan bool // TUI sends approval here (nil for sandboxed auto-approved)
+	Sandboxed     bool      // true if running in sandbox (no approval needed)
+	SandboxErr    bool      // true if sandbox blocked, asking for fallback
+	SandboxReason string    // reason if sandbox blocked
 }
 
 // AgentSubagentToolDoneMsg is sent when a subagent tool call completes.
 type AgentSubagentToolDoneMsg struct {
-	Name   string
-	Args   map[string]any
-	Status string
+	Name      string
+	Args      map[string]any
+	Status    string
+	Sandboxed bool // true if command ran in sandbox
+}
+
+// AgentSandboxFallbackMsg is sent when sandbox blocks a command and fallback is requested.
+type AgentSandboxFallbackMsg struct {
+	Command  string
+	Reason   string
+	Approved chan bool // TUI sends approval here
 }
 
 // AgentErrorMsg is sent when an error occurs during agent processing.

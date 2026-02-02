@@ -111,8 +111,37 @@ func main() {
 		p.Send(tui.AgentShellSubagentEndMsg{Status: result.Status})
 	}
 
-	agent.OnSubagentToolCall = func(name string, args map[string]any) bool {
-		// All subagent tools require approval
+	agent.OnSubagentToolCall = func(name string, args map[string]any, meta *core.ExecMeta) bool {
+		// Check if this is a sandboxed execution notification (no approval needed)
+		if meta != nil && meta.Sandboxed && !meta.SandboxError {
+			// Sandboxed execution - just notify TUI, auto-approve
+			p.Send(tui.AgentSubagentToolCallMsg{
+				Name:      name,
+				Args:      args,
+				Sandboxed: true,
+			})
+			return true
+		}
+
+		// Check if sandbox blocked and needs fallback approval
+		if meta != nil && meta.SandboxError {
+			approved := make(chan bool, 1)
+			p.Send(tui.AgentSubagentToolCallMsg{
+				Name:          name,
+				Args:          args,
+				Approved:      approved,
+				SandboxErr:    true,
+				SandboxReason: meta.SandboxReason,
+			})
+			select {
+			case result := <-approved:
+				return result
+			case <-ctx.Done():
+				return false
+			}
+		}
+
+		// Non-sandboxed execution - require approval
 		approved := make(chan bool, 1)
 		p.Send(tui.AgentSubagentToolCallMsg{Name: name, Args: args, Approved: approved})
 
@@ -126,7 +155,33 @@ func main() {
 	}
 
 	agent.OnSubagentToolDone = func(name string, args map[string]any, result core.ToolResult) {
-		p.Send(tui.AgentSubagentToolDoneMsg{Name: name, Args: args, Status: result.Status})
+		sandboxed := false
+		if result.ExecMeta != nil {
+			sandboxed = result.ExecMeta.Sandboxed
+		}
+		p.Send(tui.AgentSubagentToolDoneMsg{
+			Name:      name,
+			Args:      args,
+			Status:    result.Status,
+			Sandboxed: sandboxed,
+		})
+	}
+
+	agent.OnSandboxFallback = func(command string, reason string) bool {
+		approved := make(chan bool, 1)
+		p.Send(tui.AgentSandboxFallbackMsg{
+			Command:  command,
+			Reason:   reason,
+			Approved: approved,
+		})
+
+		// Block until user approves (Enter) or rejects (Esc), or context cancelled
+		select {
+		case result := <-approved:
+			return result
+		case <-ctx.Done():
+			return false
+		}
 	}
 
 	// Run the TUI

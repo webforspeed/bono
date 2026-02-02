@@ -40,6 +40,7 @@ type Model struct {
 	// Tool approval state
 	pendingApproval         *AgentToolCallMsg         // current main agent tool awaiting Enter/Esc
 	pendingSubagentApproval *AgentSubagentToolCallMsg // current subagent tool awaiting Enter/Esc
+	pendingSandboxFallback  *AgentSandboxFallbackMsg  // sandbox fallback awaiting Enter/Esc
 }
 
 // New creates a new TUI Model with the given agent and context.
