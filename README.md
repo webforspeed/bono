@@ -3,6 +3,7 @@
 Bono is a terminal-based AI coding agent (like Claude Code or Cursor) that autonomously reads, writes, edits, and manages code, runs shell commands, and helps automate complex development workflows—all from your command line.
 
 ![Bono Screenshot](docs/screenshot.png)
+![Bono Screenshot Example](docs/screenshot_example.png)
 
 ## Features
 
