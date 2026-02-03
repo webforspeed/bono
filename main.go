@@ -64,7 +64,7 @@ func main() {
 			return true
 		}
 
-		if name == "run_shell" {
+		if name == "run_shell" || name == "python_runtime" {
 			// Sandboxed commands auto-approve
 			if core.IsSandboxEnabled() {
 				p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Sandboxed: true})

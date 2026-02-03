@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -188,7 +189,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if reason == "" {
 			reason = "policy violation"
 		}
-		displayStr := fmt.Sprintf("  ↳ Bash(%s) [Sandbox blocked: %s] [Enter/Esc]", msg.Command, reason)
+		displayCmd := fmt.Sprintf("Bash(%s)", msg.Command)
+		if code, ok := pythonCodeFromCommand(msg.Command); ok {
+			displayCmd = fmt.Sprintf("Python(%s)", code)
+		}
+		displayStr := fmt.Sprintf("  ↳ %s [Sandbox blocked: %s] [Enter/Esc]", displayCmd, reason)
 		m.AppendRawMessage(wrapStyle.Render(displayStr))
 		m.pendingSandboxFallback = &msg
 		m.spinnerBar.SetText("Sandbox blocked - approve unsandboxed?")
@@ -255,6 +260,20 @@ func formatTool(name string, args map[string]any) string {
 			safety = "modify"
 		}
 		return fmt.Sprintf("Bash('%s') # %s, %s", cmd, desc, safety)
+	case "python_runtime":
+		code, _ := args["code"].(string)
+		desc, _ := args["description"].(string)
+		safety, _ := args["safety"].(string)
+		if desc == "" {
+			desc = "(no description)"
+		}
+		if safety == "" {
+			safety = "modify"
+		}
+		if code == "" {
+			code = "(empty code)"
+		}
+		return fmt.Sprintf("Python(%s) # %s, %s", code, desc, safety)
 	default:
 		return name
 	}
@@ -280,4 +299,23 @@ func isTerminalGarbage(s string) bool {
 		return true
 	}
 	return false
+}
+
+func pythonCodeFromCommand(command string) (string, bool) {
+	const marker = "base64.b64decode('"
+	idx := strings.Index(command, marker)
+	if idx == -1 {
+		return "", false
+	}
+	start := idx + len(marker)
+	end := strings.Index(command[start:], "')")
+	if end == -1 {
+		return "", false
+	}
+	encoded := command[start : start+end]
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return "", false
+	}
+	return string(decoded), true
 }

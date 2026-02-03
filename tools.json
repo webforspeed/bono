@@ -12,7 +12,9 @@
             "description": "The path to the file to read, e.g. 'src/main.go' or './config.json'"
           }
         },
-        "required": ["path"]
+        "required": [
+          "path"
+        ]
       }
     }
   },
@@ -33,7 +35,10 @@
             "description": "The complete text content to write. This replaces any existing content entirely."
           }
         },
-        "required": ["path", "content"]
+        "required": [
+          "path",
+          "content"
+        ]
       }
     }
   },
@@ -55,11 +60,57 @@
           },
           "safety": {
             "type": "string",
-            "enum": ["read-only", "modify", "destructive", "network", "privileged"],
+            "enum": [
+              "read-only",
+              "modify",
+              "destructive",
+              "network",
+              "privileged"
+            ],
             "description": "Safety level: read-only, modify, destructive, network, privileged"
           }
         },
-        "required": ["command", "description", "safety"]
+        "required": [
+          "command",
+          "description",
+          "safety"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "python_runtime",
+      "description": "Executes Python code inside the same sandbox used for shell commands. Use this for complex multi-step logic that would be cumbersome in shell. Returns stdout/stderr as output. Avoid network or privileged actions unless explicitly allowed.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "The Python code to execute."
+          },
+          "description": {
+            "type": "string",
+            "description": "Brief description of what this code does, for display"
+          },
+          "safety": {
+            "type": "string",
+            "enum": [
+              "read-only",
+              "modify",
+              "destructive",
+              "network",
+              "privileged"
+            ],
+            "description": "Safety level: read-only, modify, destructive, network, privileged"
+          }
+        },
+        "required": [
+          "code",
+          "description",
+          "safety"
+        ]
       }
     }
   },
@@ -89,7 +140,11 @@
             "description": "If true, replaces all occurrences. If false (default), fails when multiple matches exist."
           }
         },
-        "required": ["path", "old_string", "new_string"]
+        "required": [
+          "path",
+          "old_string",
+          "new_string"
+        ]
       }
     }
   }

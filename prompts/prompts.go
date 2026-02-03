@@ -68,6 +68,12 @@ Shell usage during exploration:
   - description: what the command inspects and why
   - safety: read-only=viewing, modify=create/change files, destructive=remove/delete, network=external connections, privileged=sudo/system
 
+Python runtime usage:
+- Use python_runtime for multi-step logic, parsing, or transformations that are cumbersome in shell.
+- Always include description and safety, just like run_shell.
+- Prefer read-only scripts unless mutation is required; verify any mutations.
+- Avoid network or privileged actions unless explicitly allowed.
+
 Recommended commands to explore:
 - cat 
 - ls / tree: understand directory layout and entry points

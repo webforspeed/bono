@@ -8,7 +8,7 @@ type AgentToolCallMsg struct {
 	Name      string
 	Args      map[string]any
 	Approved  chan bool // nil for auto-approved tools, otherwise TUI sends approval here
-	Sandboxed bool      // true if running in sandbox (shell only)
+	Sandboxed bool      // true if running in sandbox (shell/python)
 }
 
 // AgentToolDoneMsg is sent when a tool call completes.
@@ -16,7 +16,7 @@ type AgentToolDoneMsg struct {
 	Name      string
 	Args      map[string]any // needed to format the complete line
 	Status    string
-	Sandboxed bool // true if ran in sandbox (shell only)
+	Sandboxed bool // true if ran in sandbox (shell/python)
 }
 
 // AgentPreTaskStartMsg is sent when a pre-task agent starts.
