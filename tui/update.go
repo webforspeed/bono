@@ -170,6 +170,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AgentPreTaskEndMsg:
 		m.AppendRawMessage(fmt.Sprintf("● Completed %s agent", string(msg)))
 
+	case AgentPreTaskDoneMsg:
+		m.processing = false
+		m.spinnerBar.SetActive(false)
+		if msg.Err != nil {
+			m.AppendRawMessage(fmt.Sprintf("Error: %v", msg.Err))
+		}
+
 	case AgentSandboxFallbackMsg:
 		// Sandbox blocked a command - request approval for unsandboxed execution
 		wrapWidth := m.width - 2

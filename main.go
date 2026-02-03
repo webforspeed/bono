@@ -24,7 +24,6 @@ func main() {
 		Model:        os.Getenv("MODEL"),
 		SystemPrompt: prompts.System,
 		HTTPTimeout:  30 * time.Second,
-		PreTasks:     []core.PreTaskConfig{core.DefaultExploringTask()},
 	}
 
 	// Validate API key early

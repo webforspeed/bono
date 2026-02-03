@@ -25,6 +25,11 @@ type AgentPreTaskStartMsg string
 // AgentPreTaskEndMsg is sent when a pre-task agent completes.
 type AgentPreTaskEndMsg string
 
+// AgentPreTaskDoneMsg is sent when a pre-task run completes (manual trigger).
+type AgentPreTaskDoneMsg struct {
+	Err error
+}
+
 // AgentSandboxFallbackMsg is sent when sandbox blocks a command and fallback is requested.
 type AgentSandboxFallbackMsg struct {
 	Command  string

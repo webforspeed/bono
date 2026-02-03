@@ -15,14 +15,7 @@ type SlashCommand struct {
 
 // DefaultSlashCommands returns the default set of slash commands.
 func DefaultSlashCommands() []SlashCommand {
-	return []SlashCommand{
-		{Name: "help", Description: "Show available commands"},
-		{Name: "clear", Description: "Clear the chat history"},
-		{Name: "model", Description: "Switch AI model"},
-		{Name: "context", Description: "Show context window info"},
-		{Name: "spinner", Description: "Change spinner style"},
-		{Name: "exit", Description: "Exit Bono"},
-	}
+	return slashCommandList(DefaultSlashCommandSpecs())
 }
 
 // SlashModal is a component that displays a list of slash commands.

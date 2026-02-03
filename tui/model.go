@@ -21,8 +21,10 @@ type Model struct {
 	slashModal SlashModal
 
 	// Shared state
-	messages []string
-	styles   Styles
+	messages          []string
+	styles            Styles
+	slashCommands     []SlashCommandSpec
+	slashCommandIndex map[string]SlashCommandSpec
 
 	// External dependencies
 	agent    *core.Agent
@@ -61,17 +63,21 @@ func NewWithSpinnerType(agent *core.Agent, ctx context.Context, spinnerType Spin
 	spinnerBar := NewSpinnerBar(spinnerType)
 	spinnerBar.SetIdleText(cwd)
 
+	slashCommands := DefaultSlashCommandSpecs()
+
 	return Model{
-		viewport:   viewport.New(80, 20),
-		input:      NewInputBox(),
-		spinnerBar: spinnerBar,
-		statusBar:  NewStatusBar(),
-		slashModal: NewSlashModal(),
-		styles:     DefaultStyles(),
-		agent:      agent,
-		ctx:        ctx,
-		renderer:   renderer,
-		messages:   []string{},
+		viewport:          viewport.New(80, 20),
+		input:             NewInputBox(),
+		spinnerBar:        spinnerBar,
+		statusBar:         NewStatusBar(),
+		slashModal:        NewSlashModal(),
+		styles:            DefaultStyles(),
+		slashCommands:     slashCommands,
+		slashCommandIndex: slashCommandIndex(slashCommands),
+		agent:             agent,
+		ctx:               ctx,
+		renderer:          renderer,
+		messages:          []string{},
 	}
 }
 
@@ -237,65 +243,24 @@ func (m *Model) submitInput() tea.Cmd {
 func (m *Model) handleSlashCommand(cmd string) tea.Cmd {
 	cmd = strings.TrimPrefix(cmd, "/")
 	cmd = strings.TrimSpace(cmd)
+	if cmd == "" {
+		m.input.Reset()
+		return nil
+	}
 
 	// Handle commands with arguments
 	parts := strings.SplitN(cmd, " ", 2)
-	cmdName := parts[0]
+	cmdName := strings.ToLower(parts[0])
 	var cmdArg string
 	if len(parts) > 1 {
 		cmdArg = strings.TrimSpace(parts[1])
 	}
 
-	switch cmdName {
-	case "clear":
-		m.ClearMessages()
-		m.input.Reset()
-		return nil
-
-	case "exit":
-		return tea.Quit
-
-	case "help":
-		m.AppendRawMessage("Available commands:\n" +
-			"  /help           - Show this help\n" +
-			"  /clear          - Clear chat history\n" +
-			"  /model          - Show current model\n" +
-			"  /context        - Show context info\n" +
-			"  /spinner        - Cycle to next spinner style\n" +
-			"  /spinner <type> - Set spinner (dot, line, minidot, jump, pulse, points, globe, moon, monkey, meter, hamburger, ellipsis)\n" +
-			"  /exit           - Exit Bono")
-		m.input.Reset()
-		return nil
-
-	case "model":
-		m.AppendRawMessage("Model info: (dynamic info coming soon)")
-		m.input.Reset()
-		return nil
-
-	case "context":
-		m.AppendRawMessage("Context info: (dynamic info coming soon)")
-		m.input.Reset()
-		return nil
-
-	case "spinner":
-		if cmdArg == "" {
-			// Cycle to next spinner
-			m.NextSpinnerType()
-			typeName := SpinnerTypeNames[m.GetSpinnerType()]
-			m.AppendRawMessage("Spinner changed to: " + typeName)
-		} else {
-			// Set specific spinner type
-			newType := ParseSpinnerType(cmdArg)
-			m.SetSpinnerType(newType)
-			typeName := SpinnerTypeNames[m.GetSpinnerType()]
-			m.AppendRawMessage("Spinner set to: " + typeName)
-		}
-		m.input.Reset()
-		return nil
-
-	default:
-		m.AppendRawMessage("Unknown command: /" + cmd)
-		m.input.Reset()
-		return nil
+	if spec, ok := m.slashCommandIndex[cmdName]; ok {
+		return spec.Handler(m, cmdArg)
 	}
+
+	m.AppendRawMessage("Unknown command: /" + cmd)
+	m.input.Reset()
+	return nil
 }
