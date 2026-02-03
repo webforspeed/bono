@@ -42,18 +42,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.Type {
 		case tea.KeyEnter:
-			// If pending main agent tool approval, approve it
+			// If pending tool approval, approve it
 			if m.pendingApproval != nil {
 				m.pendingApproval.Approved <- true
 				m.pendingApproval = nil
 				m.spinnerBar.SetText("Thinking...")
-				return m, nil
-			}
-			// If pending subagent tool approval, approve it
-			if m.pendingSubagentApproval != nil {
-				m.pendingSubagentApproval.Approved <- true
-				m.pendingSubagentApproval = nil
-				m.spinnerBar.SetText("Running subagent...")
 				return m, nil
 			}
 			// If pending sandbox fallback approval, approve it
@@ -81,10 +74,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.pendingApproval.Approved <- false
 				m.pendingApproval = nil
 			}
-			if m.pendingSubagentApproval != nil {
-				m.pendingSubagentApproval.Approved <- false
-				m.pendingSubagentApproval = nil
-			}
 			if m.pendingSandboxFallback != nil {
 				m.pendingSandboxFallback.Approved <- false
 				m.pendingSandboxFallback = nil
@@ -92,7 +81,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case tea.KeyEsc:
-			// If pending main agent tool approval, reject it
+			// If pending tool approval, reject it
 			if m.pendingApproval != nil {
 				m.pendingApproval.Approved <- false
 				m.pendingApproval = nil
@@ -104,23 +93,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-			// If pending subagent tool approval, reject it
-			if m.pendingSubagentApproval != nil {
-				m.pendingSubagentApproval.Approved <- false
-				m.pendingSubagentApproval = nil
-				m.spinnerBar.SetText("Running subagent...")
-				// Update the message to show cancelled
-				if len(m.messages) > 0 {
-					m.messages[len(m.messages)-1] = strings.TrimSuffix(m.messages[len(m.messages)-1], " [Enter/Esc]") + " => cancelled"
-					m.updateViewportContent()
-				}
-				return m, nil
-			}
 			// If pending sandbox fallback approval, reject it
 			if m.pendingSandboxFallback != nil {
 				m.pendingSandboxFallback.Approved <- false
 				m.pendingSandboxFallback = nil
-				m.spinnerBar.SetText("Running subagent...")
+				m.spinnerBar.SetText("Thinking...")
 				// Update the message to show cancelled
 				if len(m.messages) > 0 {
 					m.messages[len(m.messages)-1] = strings.TrimSuffix(m.messages[len(m.messages)-1], " [Enter/Esc]") + " => cancelled"
@@ -149,15 +126,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		wrapStyle := lipgloss.NewStyle().Width(wrapWidth)
 
-		if msg.Approved == nil {
+		// Build display string with optional sandbox tag
+		var displayStr string
+		if msg.Sandboxed {
+			// Sandboxed shell execution - auto-approved
+			displayStr = fmt.Sprintf("● %s [Running in sandbox]", prompt)
+			m.spinnerBar.SetText("Running in sandbox...")
+		} else if msg.Approved == nil {
 			// Auto-approved (e.g., read_file) - just show it
-			m.AppendRawMessage(wrapStyle.Render(fmt.Sprintf("● %s", prompt)))
+			displayStr = fmt.Sprintf("● %s", prompt)
 		} else {
 			// Needs approval - show prompt and store for Enter/Esc handling
-			m.AppendRawMessage(wrapStyle.Render(fmt.Sprintf("● %s [Enter/Esc]", prompt)))
+			displayStr = fmt.Sprintf("● %s [Enter/Esc]", prompt)
 			m.pendingApproval = &msg
 			m.spinnerBar.SetText("Waiting for approval...")
 		}
+		m.AppendRawMessage(wrapStyle.Render(displayStr))
 
 	case AgentToolDoneMsg:
 		// Update the last message to show result
@@ -169,8 +153,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		wrapStyle := lipgloss.NewStyle().Width(wrapWidth)
 
+		// Add sandbox tag if applicable
+		var sandboxTag string
+		if msg.Sandboxed {
+			sandboxTag = " [Ran in sandbox]"
+		}
+
 		if len(m.messages) > 0 {
-			m.messages[len(m.messages)-1] = wrapStyle.Render(fmt.Sprintf("● %s => %s", prompt, msg.Status))
+			m.messages[len(m.messages)-1] = wrapStyle.Render(fmt.Sprintf("● %s%s => %s", prompt, sandboxTag, msg.Status))
 			m.updateViewportContent()
 		}
 
@@ -179,98 +169,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case AgentPreTaskEndMsg:
 		m.AppendRawMessage(fmt.Sprintf("● Completed %s agent", string(msg)))
-
-	case AgentShellSubagentStartMsg:
-		// Display subagent with truncated system prompt
-		prompt := string(msg)
-		if len(prompt) > 60 {
-			prompt = prompt[:57] + "..."
-		}
-		m.AppendRawMessage(fmt.Sprintf("● Subagent('%s')", prompt))
-
-	case AgentShellSubagentEndMsg:
-		m.AppendRawMessage(fmt.Sprintf("  ↳ Subagent completed (%s)", msg.Status))
-
-	case AgentSubagentToolCallMsg:
-		cmd, _ := msg.Args["command"].(string)
-		desc, _ := msg.Args["description"].(string)
-		safety, _ := msg.Args["safety"].(string)
-		// Soft wrap to viewport width using lipgloss
-		wrapWidth := m.width - 2
-		if wrapWidth < 40 {
-			wrapWidth = 40
-		}
-		wrapStyle := lipgloss.NewStyle().Width(wrapWidth)
-
-		// Build base display string
-		var baseStr string
-		if desc != "" || safety != "" {
-			if desc == "" {
-				desc = "(no description)"
-			}
-			if safety == "" {
-				safety = "modify"
-			}
-			baseStr = fmt.Sprintf("  ↳ Bash(%s) # %s, %s", cmd, desc, safety)
-		} else {
-			baseStr = fmt.Sprintf("  ↳ Bash(%s)", cmd)
-		}
-
-		// Handle different sandbox states
-		if msg.Sandboxed && !msg.SandboxErr {
-			// Sandboxed execution - auto-approved, show running in sandbox
-			m.AppendRawMessage(wrapStyle.Render(baseStr + " [Running in sandbox]"))
-			m.spinnerBar.SetText("Running in sandbox...")
-			// No approval needed - sandboxed execution proceeds automatically
-		} else if msg.SandboxErr {
-			// Sandbox blocked - show reason and require approval for fallback
-			reason := msg.SandboxReason
-			if reason == "" {
-				reason = "policy violation"
-			}
-			displayStr := fmt.Sprintf("%s [Sandbox blocked: %s] [Enter/Esc]", baseStr, reason)
-			m.AppendRawMessage(wrapStyle.Render(displayStr))
-			m.pendingSubagentApproval = &msg
-			m.spinnerBar.SetText("Sandbox blocked - approve unsandboxed?")
-		} else {
-			// Not sandboxed - require approval
-			displayStr := baseStr + " [Enter/Esc]"
-			m.AppendRawMessage(wrapStyle.Render(displayStr))
-			m.pendingSubagentApproval = &msg
-			m.spinnerBar.SetText("Waiting for subagent approval...")
-		}
-
-	case AgentSubagentToolDoneMsg:
-		cmd, _ := msg.Args["command"].(string)
-		desc, _ := msg.Args["description"].(string)
-		safety, _ := msg.Args["safety"].(string)
-		// Soft wrap to viewport width using lipgloss
-		wrapWidth := m.width - 2
-		if wrapWidth < 40 {
-			wrapWidth = 40
-		}
-		wrapStyle := lipgloss.NewStyle().Width(wrapWidth)
-		if len(m.messages) > 0 {
-			var displayStr string
-			var sandboxTag string
-			if msg.Sandboxed {
-				sandboxTag = " [Ran in sandbox]"
-			}
-
-			if desc != "" || safety != "" {
-				if desc == "" {
-					desc = "(no description)"
-				}
-				if safety == "" {
-					safety = "modify"
-				}
-				displayStr = fmt.Sprintf("  ↳ Bash(%s) # %s, %s%s => %s", cmd, desc, safety, sandboxTag, msg.Status)
-			} else {
-				displayStr = fmt.Sprintf("  ↳ Bash(%s)%s => %s", cmd, sandboxTag, msg.Status)
-			}
-			m.messages[len(m.messages)-1] = wrapStyle.Render(displayStr)
-			m.updateViewportContent()
-		}
 
 	case AgentSandboxFallbackMsg:
 		// Sandbox blocked a command - request approval for unsandboxed execution

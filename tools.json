@@ -41,29 +41,25 @@
     "type": "function",
     "function": {
       "name": "run_shell",
-      "description": "Executes a shell command via a specialized subagent. The subagent runs the command, analyzes output per your system_prompt instructions, and returns only relevant information. This keeps verbose command output out of main context. The subagent can run follow-up commands if needed to complete its task. Use for any CLI operation: build commands, git operations, package managers, file exploration. Always end system_prompt with: 'Output {{SHELL_DONE}} followed by your response.'",
+      "description": "Executes a shell command and returns the output. Use for any CLI operation: build commands, git operations, package managers, file exploration.",
       "parameters": {
         "type": "object",
         "properties": {
           "command": {
             "type": "string",
-            "description": "The initial shell command to execute, e.g. 'git log --oneline -20' or 'find . -name \"*.go\"'"
+            "description": "The shell command to execute, e.g. 'git log --oneline -20' or 'find . -name \"*.go\"'"
           },
           "description": {
             "type": "string",
-            "description": "A brief human-readable description of what this command accomplishes, for logging and review purposes"
+            "description": "Brief description of what this command does, for display"
           },
           "safety": {
             "type": "string",
             "enum": ["read-only", "modify", "destructive", "network", "privileged"],
-            "description": "Safety classification. 'read-only': no side effects (ls, cat, grep). 'modify': reversible changes (git add, touch). 'destructive': irreversible (rm -rf). 'network': external requests (curl, git push). 'privileged': requires sudo."
-          },
-          "system_prompt": {
-            "type": "string",
-            "description": "Instructions for the shell subagent that will execute and analyze the command output. Must specify: (1) the subagent's role/identity, (2) what specific information to extract or verify from the output, (3) what to ignore or filter out, (4) the exact format for the response. Be precise - the subagent returns only what you ask for. End your instructions with: 'Output {{SHELL_DONE}} followed by your response.'"
+            "description": "Safety level: read-only, modify, destructive, network, privileged"
           }
         },
-        "required": ["command", "description", "safety", "system_prompt"]
+        "required": ["command", "description", "safety"]
       }
     }
   },

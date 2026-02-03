@@ -59,18 +59,30 @@ func main() {
 
 	// Set up agent hooks to send messages to TUI
 	agent.OnToolCall = func(name string, args map[string]any) bool {
-		// Skip display for run_shell - subagent hooks handle it
-		if name == "run_shell" {
-			return true // auto-approve, subagent will ask for each command
-		}
-
 		if name == "read_file" {
 			// Auto-approve reads
-			p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Approved: nil})
+			p.Send(tui.AgentToolCallMsg{Name: name, Args: args})
 			return true
 		}
 
-		// Create channel and wait for TUI approval
+		if name == "run_shell" {
+			// Sandboxed commands auto-approve
+			if core.IsSandboxEnabled() {
+				p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Sandboxed: true})
+				return true
+			}
+			// Non-sandboxed requires approval
+			approved := make(chan bool, 1)
+			p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Approved: approved})
+			select {
+			case result := <-approved:
+				return result
+			case <-ctx.Done():
+				return false
+			}
+		}
+
+		// Other tools (write_file, edit_file) require approval
 		approved := make(chan bool, 1)
 		p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Approved: approved})
 
@@ -84,11 +96,11 @@ func main() {
 	}
 
 	agent.OnToolDone = func(name string, args map[string]any, result core.ToolResult) {
-		// Skip for run_shell - subagent hooks handle it
-		if name == "run_shell" {
-			return
+		sandboxed := false
+		if result.ExecMeta != nil {
+			sandboxed = result.ExecMeta.Sandboxed
 		}
-		p.Send(tui.AgentToolDoneMsg{Name: name, Args: args, Status: result.Status})
+		p.Send(tui.AgentToolDoneMsg{Name: name, Args: args, Status: result.Status, Sandboxed: sandboxed})
 	}
 
 	agent.OnMessage = func(content string) {
@@ -101,70 +113,6 @@ func main() {
 
 	agent.OnPreTaskEnd = func(name string) {
 		p.Send(tui.AgentPreTaskEndMsg(name))
-	}
-
-	agent.OnShellSubagentStart = func(systemPrompt string) {
-		p.Send(tui.AgentShellSubagentStartMsg(systemPrompt))
-	}
-
-	agent.OnShellSubagentEnd = func(result core.ToolResult) {
-		p.Send(tui.AgentShellSubagentEndMsg{Status: result.Status})
-	}
-
-	agent.OnSubagentToolCall = func(name string, args map[string]any, meta *core.ExecMeta) bool {
-		// Check if this is a sandboxed execution notification (no approval needed)
-		if meta != nil && meta.Sandboxed && !meta.SandboxError {
-			// Sandboxed execution - just notify TUI, auto-approve
-			p.Send(tui.AgentSubagentToolCallMsg{
-				Name:      name,
-				Args:      args,
-				Sandboxed: true,
-			})
-			return true
-		}
-
-		// Check if sandbox blocked and needs fallback approval
-		if meta != nil && meta.SandboxError {
-			approved := make(chan bool, 1)
-			p.Send(tui.AgentSubagentToolCallMsg{
-				Name:          name,
-				Args:          args,
-				Approved:      approved,
-				SandboxErr:    true,
-				SandboxReason: meta.SandboxReason,
-			})
-			select {
-			case result := <-approved:
-				return result
-			case <-ctx.Done():
-				return false
-			}
-		}
-
-		// Non-sandboxed execution - require approval
-		approved := make(chan bool, 1)
-		p.Send(tui.AgentSubagentToolCallMsg{Name: name, Args: args, Approved: approved})
-
-		// Block until user approves (Enter) or rejects (Esc), or context cancelled
-		select {
-		case result := <-approved:
-			return result
-		case <-ctx.Done():
-			return false
-		}
-	}
-
-	agent.OnSubagentToolDone = func(name string, args map[string]any, result core.ToolResult) {
-		sandboxed := false
-		if result.ExecMeta != nil {
-			sandboxed = result.ExecMeta.Sandboxed
-		}
-		p.Send(tui.AgentSubagentToolDoneMsg{
-			Name:      name,
-			Args:      args,
-			Status:    result.Status,
-			Sandboxed: sandboxed,
-		})
 	}
 
 	agent.OnSandboxFallback = func(command string, reason string) bool {

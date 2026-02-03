@@ -10,8 +10,8 @@ Bono is a terminal-based AI coding agent (like Claude Code or Cursor) that auton
 - [x] Autonomous agent loop with tool-call execution
 - [x] Built‑in file tools (read/write/edit)
 - [x] Shell execution with user approvals
-- [x] Auto-exploring agent (generates AGENT.md on first run)
-- [x] Agent config files (AGENT.md)
+- [x] Auto-exploring agent (generates AGENTS.md on first run)
+- [x] Agent config files (AGENTS.md)
 - [ ] Worktree‑isolated runs (disposable workspaces)
 - [ ] Sandboxed execution (FS/command restrictions)
 - [ ] Skills system (prompt/tool bundles)
@@ -62,14 +62,14 @@ Then type your prompts at the `>` prompt.
 
 ### Exploring Agent
 
-On the first chat message, an exploring agent automatically runs to analyze your project and create an `AGENT.md` file. This file contains:
+On the first chat message, an exploring agent automatically runs to analyze your project and create an `AGENTS.md` file. This file contains:
 
 - Project structure and entry points
 - Conventions and patterns
 - Rules (always/never/style guidelines)
 - Tips for finding things
 
-The main agent reads `AGENT.md` at the start of each session to understand your project context.
+The main agent reads `AGENTS.md` at the start of each session to understand your project context.
 
 ## Sub-agents
 
@@ -77,7 +77,7 @@ Sub-agents are specialized agents that handle specific tasks independently. They
 
 | Sub-agent | Description |
 |-----------|-------------|
-| Explore | Analyzes the codebase and generates an `AGENT.md` file with project structure, conventions, and patterns |
+| Explore | Analyzes the codebase and generates an `AGENTS.md` file with project structure, conventions, and patterns |
 | Shell | Executes shell commands, analyzes output per custom instructions, and returns only relevant information. Can run follow-up commands autonomously to complete its task |
 
 ### Tool Confirmations
@@ -101,7 +101,7 @@ Sub-agents are specialized agents that handle specific tasks independently. They
 
 What makes this different from other open source agents:
 
-- **Self-documenting**: The agent automatically creates and maintains an `AGENT.md` file with project context. This runs as a separate sub-agent with its own context window, so the main agent doesn't suffer from context rot as the conversation grows.
+- **Self-documenting**: The agent automatically creates and maintains an `AGENTS.md` file with project context. This runs as a separate sub-agent with its own context window, so the main agent doesn't suffer from context rot as the conversation grows.
 
 - **Shell commands are sub-agents**: Every shell command runs through a dedicated sub-agent with its own context. The main agent provides instructions on what to extract, and the shell sub-agent handles execution, analyzes potentially verbose output, and returns only the relevant information. This keeps build logs, git diffs, and other noisy output from bloating the main context window.
 
