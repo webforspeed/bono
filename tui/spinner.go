@@ -190,13 +190,13 @@ func (s SpinnerBar) View(styles Styles) string {
 		left = s.spinner.View() + " " + s.text
 	}
 
-	// Build right-side segments: model name • X% context used
+	// Build right-side segments: context used • CWD • model
 	var rightParts []string
-	if !s.active && s.idleText != "" {
-		rightParts = append(rightParts, s.idleText)
-	}
 	if s.contextUsagePct > 0 {
 		rightParts = append(rightParts, fmt.Sprintf("%.0f%% context used", s.contextUsagePct))
+	}
+	if s.idleText != "" {
+		rightParts = append(rightParts, s.idleText)
 	}
 
 	style := styles.SpinnerBar
@@ -247,16 +247,14 @@ func (s SpinnerBar) renderRightParts(parts []string, dimStyle lipgloss.Style) st
 	if len(parts) == 0 {
 		return ""
 	}
-	// Last part gets context usage coloring if we have context data
+	// First part gets context usage coloring if we have context data
 	sep := dimStyle.Render(" • ")
 	var result string
 	for i, part := range parts {
 		if i > 0 {
 			result += sep
 		}
-		if s.contextUsagePct > 0 && i == len(parts)-1 && len(parts) > 1 {
-			result += lipgloss.NewStyle().Foreground(contextUsageColor(s.contextUsagePct)).Render(part)
-		} else if s.contextUsagePct > 0 && len(parts) == 1 {
+		if s.contextUsagePct > 0 && i == 0 {
 			result += lipgloss.NewStyle().Foreground(contextUsageColor(s.contextUsagePct)).Render(part)
 		} else {
 			result += dimStyle.Render(part)
