@@ -163,8 +163,8 @@ func main() {
 		p.Send(tui.AgentPreTaskEndMsg(name))
 	}
 
-	agent.OnContextUsage = func(pct float64) {
-		p.Send(tui.AgentContextUsageMsg{Pct: pct})
+	agent.OnContextUsage = func(pct float64, totalCost float64) {
+		p.Send(tui.AgentContextUsageMsg{Pct: pct, TotalCost: totalCost})
 	}
 
 	agent.OnSandboxFallback = func(command string, reason string) bool {

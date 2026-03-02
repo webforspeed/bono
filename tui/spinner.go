@@ -94,6 +94,7 @@ type SpinnerBar struct {
 	active          bool
 	spinnerType     SpinnerType
 	contextUsagePct float64 // 0 means not yet known
+	totalCost       float64 // cumulative session cost in dollars
 }
 
 // NewSpinnerBar creates a new SpinnerBar with the specified spinner type.
@@ -163,6 +164,11 @@ func (s *SpinnerBar) SetContextUsage(pct float64) {
 	s.contextUsagePct = pct
 }
 
+// SetTotalCost updates the cumulative session cost.
+func (s *SpinnerBar) SetTotalCost(cost float64) {
+	s.totalCost = cost
+}
+
 // Text returns the current status text.
 func (s SpinnerBar) Text() string {
 	return s.text
@@ -190,10 +196,13 @@ func (s SpinnerBar) View(styles Styles) string {
 		left = s.spinner.View() + " " + s.text
 	}
 
-	// Build right-side segments: context used • CWD • model
+	// Build right-side segments: context used • cost • CWD • model
 	var rightParts []string
 	if s.contextUsagePct > 0 {
 		rightParts = append(rightParts, fmt.Sprintf("%.0f%% context used", s.contextUsagePct))
+	}
+	if s.totalCost > 0 {
+		rightParts = append(rightParts, formatCost(s.totalCost))
 	}
 	if s.idleText != "" {
 		rightParts = append(rightParts, s.idleText)
@@ -261,6 +270,18 @@ func (s SpinnerBar) renderRightParts(parts []string, dimStyle lipgloss.Style) st
 		}
 	}
 	return result
+}
+
+// formatCost formats a dollar cost for display, adapting precision to magnitude.
+func formatCost(cost float64) string {
+	switch {
+	case cost >= 1.0:
+		return fmt.Sprintf("$%.2f", cost)
+	case cost >= 0.01:
+		return fmt.Sprintf("$%.3f", cost)
+	default:
+		return fmt.Sprintf("$%.4f", cost)
+	}
 }
 
 // contextUsageColor returns a color based on how full the context is.
