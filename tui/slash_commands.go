@@ -66,8 +66,14 @@ func handleClear(m *Model, arg string) tea.Cmd {
 }
 
 func handleModel(m *Model, arg string) tea.Cmd {
-	m.AppendRawMessage("Model info: (dynamic info coming soon)")
+	if len(m.modelModal.models) == 0 {
+		m.AppendRawMessage("No models available. Place a models.json in the project root.")
+		m.input.Reset()
+		return nil
+	}
 	m.input.Reset()
+	m.modelModal.Show()
+	m.recalculateLayout()
 	return nil
 }
 

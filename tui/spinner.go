@@ -86,12 +86,13 @@ func (t SpinnerType) toSpinnerModel() spinner.Spinner {
 
 // SpinnerBar displays a spinner with status text above the input box.
 type SpinnerBar struct {
-	spinner        spinner.Model
-	text           string // text shown when spinner is active (e.g., "Thinking...")
-	idleText       string // text shown when spinner is inactive (e.g., working directory)
-	width          int
-	active         bool
-	spinnerType    SpinnerType
+	spinner         spinner.Model
+	text            string // text shown when spinner is active (e.g., "Thinking...")
+	idleText        string // text shown when spinner is inactive (e.g., working directory)
+	rightText       string // text shown on right side (e.g., model name)
+	width           int
+	active          bool
+	spinnerType     SpinnerType
 	contextUsagePct float64 // 0 means not yet known
 }
 
@@ -118,6 +119,11 @@ func (s *SpinnerBar) SetText(text string) {
 // SetIdleText updates the text shown when spinner is inactive (e.g., working directory).
 func (s *SpinnerBar) SetIdleText(text string) {
 	s.idleText = text
+}
+
+// SetRightText sets the right-aligned text (e.g., model name).
+func (s *SpinnerBar) SetRightText(text string) {
+	s.rightText = text
 }
 
 // SetWidth sets the width of the spinner bar.
@@ -184,9 +190,9 @@ func (s SpinnerBar) View(styles Styles) string {
 		left = s.spinner.View() + " " + s.text
 	}
 
-	// Build right-side segments: cwd • X% context used
+	// Build right-side segments: model name • X% context used
 	var rightParts []string
-	if s.idleText != "" {
+	if !s.active && s.idleText != "" {
 		rightParts = append(rightParts, s.idleText)
 	}
 	if s.contextUsagePct > 0 {
@@ -198,13 +204,30 @@ func (s SpinnerBar) View(styles Styles) string {
 		style = style.Width(s.width)
 	}
 
-	if len(rightParts) == 0 {
+	// Model name on far right
+	modelPart := ""
+	if s.rightText != "" {
+		modelPart = lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render(s.rightText)
+	}
+
+	if len(rightParts) == 0 && modelPart == "" {
+		if !s.active {
+			return style.Render(s.idleText)
+		}
 		return style.Render(left)
 	}
 
 	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	// Color the context usage segment if present
 	right := s.renderRightParts(rightParts, dimStyle)
+
+	// Append model name after context usage
+	if modelPart != "" {
+		if right != "" {
+			right += dimStyle.Render(" • ") + modelPart
+		} else {
+			right = modelPart
+		}
+	}
 
 	// Available width inside padding
 	pad := style.GetHorizontalPadding()
@@ -232,10 +255,8 @@ func (s SpinnerBar) renderRightParts(parts []string, dimStyle lipgloss.Style) st
 			result += sep
 		}
 		if s.contextUsagePct > 0 && i == len(parts)-1 && len(parts) > 1 {
-			// Last part is context usage — color it
 			result += lipgloss.NewStyle().Foreground(contextUsageColor(s.contextUsagePct)).Render(part)
 		} else if s.contextUsagePct > 0 && len(parts) == 1 {
-			// Only context usage, no cwd
 			result += lipgloss.NewStyle().Foreground(contextUsageColor(s.contextUsagePct)).Render(part)
 		} else {
 			result += dimStyle.Render(part)

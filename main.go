@@ -50,10 +50,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Load model catalog
+	models, err := tui.LoadModelCatalog("models.json")
+	if err != nil {
+		// Non-fatal: catalog is optional, fall back to config default
+		models = nil
+	}
+
+	// Model priority: MODEL env var (deprecated) > first model in catalog > bono-core default
+	model := os.Getenv("MODEL")
+	if model == "" && len(models) > 0 {
+		model = models[0].ID
+	}
+
 	config := core.Config{
 		APIKey:       os.Getenv("OPENROUTER_API_KEY"),
 		BaseURL:      os.Getenv("BASE_URL"),
-		Model:        os.Getenv("MODEL"),
+		Model:        model,
 		SystemPrompt: systemPrompt,
 		HTTPTimeout:  120 * time.Second,
 	}
@@ -87,10 +100,10 @@ func main() {
 	ctx := context.Background()
 
 	// Create TUI model
-	model := tui.New(agent, ctx)
+	tuiModel := tui.NewWithOptions(agent, ctx, tui.SpinnerDot, models)
 
 	// Create Bubble Tea program (use alt screen for full viewport)
-	p := tea.NewProgram(model, tea.WithAltScreen())
+	p := tea.NewProgram(tuiModel, tea.WithAltScreen())
 
 	// Set up agent hooks to send messages to TUI
 	agent.OnToolCall = func(name string, args map[string]any) bool {

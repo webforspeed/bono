@@ -14,7 +14,18 @@ func (m Model) View() string {
 	inputView := m.input.View(m.styles)
 	statusView := m.statusBar.View(m.styles)
 
-	// Conditionally include slash modal
+	// Conditionally include modals above the spinner bar
+	if m.modelModal.IsActive() {
+		modalView := m.modelModal.View(m.styles)
+		return lipgloss.JoinVertical(lipgloss.Left,
+			viewportView,
+			modalView,
+			spinnerView,
+			inputView,
+			statusView,
+		)
+	}
+
 	if m.slashModal.IsActive() {
 		slashView := m.slashModal.View(m.styles)
 		return lipgloss.JoinVertical(lipgloss.Left,

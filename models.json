@@ -1,0 +1,74 @@
+[
+  {
+    "id": "anthropic/claude-opus-4",
+    "name": "Claude Opus 4",
+    "provider": "Anthropic",
+    "capabilities": ["coding", "reasoning", "analysis", "vision"],
+    "context": "200K",
+    "tier": "flagship"
+  },
+  {
+    "id": "anthropic/claude-sonnet-4",
+    "name": "Claude Sonnet 4",
+    "provider": "Anthropic",
+    "capabilities": ["coding", "reasoning", "fast"],
+    "context": "200K",
+    "tier": "balanced"
+  },
+  {
+    "id": "openai/gpt-4.1",
+    "name": "GPT-4.1",
+    "provider": "OpenAI",
+    "capabilities": ["coding", "reasoning", "analysis", "vision"],
+    "context": "1M",
+    "tier": "flagship"
+  },
+  {
+    "id": "openai/gpt-4.1-mini",
+    "name": "GPT-4.1 Mini",
+    "provider": "OpenAI",
+    "capabilities": ["coding", "fast"],
+    "context": "1M",
+    "tier": "balanced"
+  },
+  {
+    "id": "openai/o3",
+    "name": "O3",
+    "provider": "OpenAI",
+    "capabilities": ["reasoning", "coding", "analysis"],
+    "context": "200K",
+    "tier": "flagship"
+  },
+  {
+    "id": "google/gemini-2.5-pro-preview",
+    "name": "Gemini 2.5 Pro",
+    "provider": "Google",
+    "capabilities": ["coding", "reasoning", "analysis", "vision"],
+    "context": "1M",
+    "tier": "flagship"
+  },
+  {
+    "id": "google/gemini-2.5-flash-preview",
+    "name": "Gemini 2.5 Flash",
+    "provider": "Google",
+    "capabilities": ["coding", "fast"],
+    "context": "1M",
+    "tier": "balanced"
+  },
+  {
+    "id": "deepseek/deepseek-r1",
+    "name": "DeepSeek R1",
+    "provider": "DeepSeek",
+    "capabilities": ["reasoning", "coding"],
+    "context": "64K",
+    "tier": "balanced"
+  },
+  {
+    "id": "deepseek/deepseek-chat",
+    "name": "DeepSeek V3",
+    "provider": "DeepSeek",
+    "capabilities": ["coding", "fast"],
+    "context": "64K",
+    "tier": "budget"
+  }
+]

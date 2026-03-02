@@ -19,6 +19,7 @@ type Model struct {
 	spinnerBar SpinnerBar
 	statusBar  StatusBar
 	slashModal SlashModal
+	modelModal ModelModal
 
 	// Shared state
 	messages          []string
@@ -46,11 +47,11 @@ type Model struct {
 
 // New creates a new TUI Model with the given agent and context.
 func New(agent *core.Agent, ctx context.Context) Model {
-	return NewWithSpinnerType(agent, ctx, SpinnerDot)
+	return NewWithOptions(agent, ctx, SpinnerDot, nil)
 }
 
-// NewWithSpinnerType creates a new TUI Model with the given agent, context, and spinner type.
-func NewWithSpinnerType(agent *core.Agent, ctx context.Context, spinnerType SpinnerType) Model {
+// NewWithOptions creates a new TUI Model with the given agent, context, spinner type, and model catalog.
+func NewWithOptions(agent *core.Agent, ctx context.Context, spinnerType SpinnerType, models []ModelInfo) Model {
 	// Use DarkStyle instead of AutoStyle to avoid terminal queries that cause garbage input
 	renderer, _ := glamour.NewTermRenderer(
 		glamour.WithStylePath("dark"),
@@ -63,6 +64,17 @@ func NewWithSpinnerType(agent *core.Agent, ctx context.Context, spinnerType Spin
 	spinnerBar := NewSpinnerBar(spinnerType)
 	spinnerBar.SetIdleText(cwd)
 
+	// Show current model name from agent
+	modelName := agent.ModelName()
+	// Use short display name if found in catalog
+	for _, m := range models {
+		if m.ID == modelName {
+			modelName = m.Name
+			break
+		}
+	}
+	spinnerBar.SetRightText(modelName)
+
 	slashCommands := DefaultSlashCommandSpecs()
 
 	return Model{
@@ -71,6 +83,7 @@ func NewWithSpinnerType(agent *core.Agent, ctx context.Context, spinnerType Spin
 		spinnerBar:        spinnerBar,
 		statusBar:         NewStatusBar(),
 		slashModal:        NewSlashModal(),
+		modelModal:        NewModelModal(models),
 		styles:            DefaultStyles(),
 		slashCommands:     slashCommands,
 		slashCommandIndex: slashCommandIndex(slashCommands),
@@ -123,16 +136,18 @@ func (m *Model) recalculateLayout() {
 	inputHeight := 3   // Input box with border
 	statusHeight := 1  // Status bar
 	slashHeight := m.slashModal.Height()
+	modelHeight := m.modelModal.Height()
 
 	// Set component widths
 	m.spinnerBar.SetWidth(m.width)
 	m.input.SetWidth(m.width, m.styles.InputBox)
 	m.statusBar.SetWidth(m.width)
 	m.slashModal.SetWidth(m.width)
+	m.modelModal.SetWidth(m.width)
 
 	// Viewport gets remaining space
 	m.viewport.Width = m.width
-	height := m.height - spinnerHeight - inputHeight - statusHeight - slashHeight
+	height := m.height - spinnerHeight - inputHeight - statusHeight - slashHeight - modelHeight
 	if height < 1 {
 		height = 1
 	}

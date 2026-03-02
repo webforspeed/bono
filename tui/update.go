@@ -31,6 +31,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Model modal gets first chance at keys when active
+		if m.modelModal.IsActive() {
+			if cmd, handled := m.modelModal.HandleKey(msg); handled {
+				m.recalculateLayout()
+				if cmd != nil {
+					return m, cmd
+				}
+				return m, nil
+			}
+		}
+
 		// Slash modal gets first chance at keys when active
 		if m.slashModal.IsActive() {
 			if selected, handled := m.slashModal.HandleKey(msg); handled {
@@ -200,6 +211,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case AgentContextUsageMsg:
 		m.spinnerBar.SetContextUsage(msg.Pct)
+
+	case ModelSelectedMsg:
+		m.agent.SetModel(msg.Model.ID)
+		m.spinnerBar.SetRightText(msg.Model.Name)
+		m.AppendRawMessage(fmt.Sprintf("Model switched to: %s (%s)", msg.Model.Name, msg.Model.ID))
+		m.recalculateLayout()
 
 	case AgentErrorMsg:
 		m.AppendRawMessage(fmt.Sprintf("Error: %v", msg.Err))
