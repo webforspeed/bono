@@ -274,6 +274,8 @@ func formatTool(name string, args map[string]any) string {
 			code = "(empty code)"
 		}
 		return fmt.Sprintf("Python(%s) # %s, %s", code, desc, safety)
+	case "compact_context":
+		return "Compact(context)"
 	default:
 		return name
 	}

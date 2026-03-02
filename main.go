@@ -3,9 +3,10 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
+	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,15 +16,58 @@ import (
 	"github.com/webforspeed/bono/tui"
 )
 
+const systemPromptVersion = "v1.0.5"
+
 func main() {
 	loadEnv()
+
+	cwd, _ := os.Getwd()
+	if cwd == "" {
+		cwd = "."
+	}
+	username := os.Getenv("USER")
+	if username == "" {
+		username = os.Getenv("LOGNAME")
+	}
+
+	promptCtx := prompts.PromptContext{
+		HostContext: prompts.HostContext{
+			CWD:      cwd,
+			OS:       runtime.GOOS,
+			Arch:     runtime.GOARCH,
+			Username: username,
+			DateTime: time.Now().Format("2006-01-02 15:04:05 MST"),
+		},
+		Identity: prompts.AgentIdentity{
+			Role:     "coding",
+			Platform: "terminal",
+		},
+	}
+
+	systemPrompt, err := prompts.LoadSystemPromptVersion(promptCtx, systemPromptVersion)
+	if err != nil {
+		fmt.Printf("Error loading system prompt version %q: %v\n", systemPromptVersion, err)
+		os.Exit(1)
+	}
 
 	config := core.Config{
 		APIKey:       os.Getenv("OPENROUTER_API_KEY"),
 		BaseURL:      os.Getenv("BASE_URL"),
 		Model:        os.Getenv("MODEL"),
-		SystemPrompt: prompts.System,
-		HTTPTimeout:  30 * time.Second,
+		SystemPrompt: systemPrompt,
+		HTTPTimeout:  120 * time.Second,
+	}
+	if n := os.Getenv("API_TIMEOUT_SEC"); n != "" {
+		if v, err := strconv.Atoi(n); err == nil && v > 0 {
+			config.HTTPTimeout = time.Duration(v) * time.Second
+		}
+	}
+	if n := os.Getenv("MAX_TOOL_CALLS_PER_TURN"); n != "" {
+		if v, err := strconv.Atoi(n); err == nil && v >= 0 {
+			config.MaxToolCallsPerTurn = v
+		}
+	} else {
+		config.MaxToolCallsPerTurn = 50
 	}
 
 	// Validate API key early
@@ -31,14 +75,6 @@ func main() {
 		fmt.Println("Error: OPENROUTER_API_KEY required")
 		os.Exit(1)
 	}
-
-	// Load tools
-	toolsData, err := os.ReadFile("tools.json")
-	if err != nil {
-		fmt.Printf("Error loading tools.json: %v\n", err)
-		os.Exit(1)
-	}
-	json.Unmarshal(toolsData, &config.Tools)
 
 	// Create agent
 	agent, err := core.NewAgent(config)
@@ -58,8 +94,8 @@ func main() {
 
 	// Set up agent hooks to send messages to TUI
 	agent.OnToolCall = func(name string, args map[string]any) bool {
-		if name == "read_file" {
-			// Auto-approve reads
+		if name == "read_file" || name == "compact_context" {
+			// Auto-approve reads and context compaction
 			p.Send(tui.AgentToolCallMsg{Name: name, Args: args})
 			return true
 		}

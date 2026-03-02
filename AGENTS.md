@@ -1,88 +1,53 @@
-# AGENTS.md
+# Bono - A coding agent written in Go
 
-## Project Map
+This guide should be used when working in Bono repo. Bono repo is a TUI frontend repo and depends on bono-core repo which contains the agentic loop and tools.
+All code changes related hooks, TUI and user facing behaviors should be done in this Bono repo. All changes related to agentic loop, tool calls, web requests etc should be in bono-core repo.
 
-**Entry:** `main.go` - CLI entry point, config setup, agent hooks  
-**TUI:** `tui/` - Bubble Tea terminal UI components  
-**Core:** `github.com/webforspeed/bono-core` - external library providing agent loop, API client, and tool execution
 
-### Structure (grouped)
+## When Working (Practical)
 
-**Entry & Config**
-- `main.go` - entry point, config loading, agent hooks (OnToolCall, OnToolDone, OnMessage, OnPreTask*)
-- `prompts/prompts.go` - system prompt configuration
-- `tools.json` - tool definitions (read_file, write_file, edit_file, run_shell)
-- `.env` / `.env.example` - environment configuration (API keys, model selection)
+### How-to Guides
+> Problem-oriented. Step-by-step solutions for specific tasks.
 
-**TUI Package** (`tui/`)
-- `model.go` - main Model struct, initialization, slash command handling
-- `update.go` - Update function, key handling, tool formatting, terminal garbage filtering
-- `view.go` - View rendering, layout composition
-- `messages.go` - message types (AgentMessageMsg, AgentToolCallMsg, AgentToolDoneMsg, etc.)
-- `input.go` - InputBox component
-- `spinner.go` - SpinnerBar component with multiple spinner styles
-- `statusbar.go` - StatusBar component
-- `slashmodal.go` - SlashModal component for command autocomplete
-- `styles.go` - centralized styles (DefaultStyles)
+- [How to create a new system prompt](./docs/how-to/new-system-prompt.md)
+- [How to create a new tool](./docs/how-to/new-tool.md)
 
-**Build Artifacts**
-- `go.mod` / `go.sum` - Go module dependencies
-- `bono` - compiled binary
+### Reference
+> Information-oriented. Exact specifications, APIs, configs. etc
 
-### Conventions
+## When Learning (Theoretical)
 
-- System prompts → `prompts/prompts.go` as exported constants
-- Tool definitions → `tools.json` (JSON schema format)
-- Configuration → environment variables via `.env` file
-- Core agent logic → external `bono-core` library (not in this repo)
-- TUI follows Bubble Tea patterns: Model, Update, View
-- TUI components are composable (InputBox, SpinnerBar, StatusBar, SlashModal)
+### Tutorials
+> Learning-oriented. Follow along from start to finish.
 
-### Finding things
+- [Designing with progressive disclosure](./docs/tutorials/design-with-progressive-disclosure)
+### Explanation
+> Understanding-oriented. Architecture, design decisions, and "why."
 
-- Agent behavior/personality → `prompts/prompts.go`
-- Available tools → `tools.json`
-- Agent hooks setup → `main.go` (OnToolCall, OnToolDone, OnMessage, OnPreTaskStart, OnPreTaskEnd)
-- TUI model & slash commands → `tui/model.go`
-- Key handling & tool approval → `tui/update.go`
-- Message types for TUI ↔ agent → `tui/messages.go`
-- Visual rendering → `tui/view.go`
-- Component styling → `tui/styles.go`
-- Configuration → `.env` or `.env.example`
-- Core agent loop → external `bono-core` package
+- [How system prompts work in Bono agent](./docs/explaination/system-prompt-lifecycle.md)
+- [How tools work in Bono agent](./docs/explaination/tool-design.md)
+- [How context engineering works in this harness](./docs/explaination/bono-context-enginerring-guide.md)
 
-## Rules
+## IMPORTANT RULES
 
-### Always
+> Models are intelligent and always performs correctly. During documentation, implementing code, system design, prefer providing models constraints and nudges instead of explcity instructions and scaffolding. This limits LLM models to be intelligent.
 
-- Run `go build .` after changes to test compilation
-- Set `OPENROUTER_API_KEY` environment variable before running
-- Use `.env` file for local configuration
-- For local bono-core development, use `replace` directive in `go.mod`
-- Follow Bubble Tea patterns in `tui/` package (Model, Update, View)
+### DO RULES
+- write simple readable idiomatic golang code
+- bias towards simple code that fails fast instead of writing complex code trying to handle all corner conditions and hiding complexity
+- Follow golang standard library conventions 
+- For documentation, prefer high-level guidance that captures intent and constraints, and trust the model to derive mechanics from the codebase. 
 
-### Never
+### DO NOT RULES
+- write code that overly complex to satisfy all corner conditions and trying to be magical. 
+- Do not implement features that was not asked for. If you think it is necessary, ask user before implementing.
+- For documentation, avoid exhaustive, hand-holding instructions that prescribe every step or repeat what is already obvious in code
 
-- Don't commit `.env` file with real API keys
-- Don't modify `bono` binary directly (it's compiled output)
-- Don't change tool schemas in `tools.json` without updating corresponding handlers in `bono-core`
-- Don't use magic constants for UI sizing - derive dimensions dynamically from styles and content
-- Don't put TUI logic in `main.go` - keep it in the `tui/` package
+## ROADMAP
+> Below is the roadmap of features that is being planned to be added. Use this as context so when writing code, its easily extensible for below features without too much refactoring
 
-### Style
-
-- Go standard formatting (`go fmt`)
-- System prompts use backtick-delimited multi-line strings
-- Tool definitions follow OpenAI function calling JSON schema
-- Keep `main.go` minimal - just config, hooks setup, and program launch
-- TUI components should be self-contained with their own state and update methods
-- Use `tui/messages.go` for all custom message types
-- Use `tui/styles.go` for centralized styling
-
-### When unsure
-
-- Check `README.md` for usage and installation instructions
-- Review `bono-core` library for agent loop implementation details
-- Check `.env.example` for required environment variables
-- Ask before modifying system prompts or tool definitions
-- Check existing TUI components in `tui/` for patterns to follow
+- Semantic code search using vector indexing tool
+- plan mode tool
+- askusequestion tool
+- todo write tool
+- guardrails like forceful compaction on certain conditions
