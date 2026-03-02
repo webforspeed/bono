@@ -198,6 +198,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.pendingSandboxFallback = &msg
 		m.spinnerBar.SetText("Sandbox blocked - approve unsandboxed?")
 
+	case AgentContextUsageMsg:
+		m.spinnerBar.SetContextUsage(msg.Pct)
+
 	case AgentErrorMsg:
 		m.AppendRawMessage(fmt.Sprintf("Error: %v", msg.Err))
 

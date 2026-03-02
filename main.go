@@ -150,6 +150,10 @@ func main() {
 		p.Send(tui.AgentPreTaskEndMsg(name))
 	}
 
+	agent.OnContextUsage = func(pct float64) {
+		p.Send(tui.AgentContextUsageMsg{Pct: pct})
+	}
+
 	agent.OnSandboxFallback = func(command string, reason string) bool {
 		approved := make(chan bool, 1)
 		p.Send(tui.AgentSandboxFallbackMsg{

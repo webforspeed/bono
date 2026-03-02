@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -84,12 +86,13 @@ func (t SpinnerType) toSpinnerModel() spinner.Spinner {
 
 // SpinnerBar displays a spinner with status text above the input box.
 type SpinnerBar struct {
-	spinner     spinner.Model
-	text        string // text shown when spinner is active (e.g., "Thinking...")
-	idleText    string // text shown when spinner is inactive (e.g., working directory)
-	width       int
-	active      bool
-	spinnerType SpinnerType
+	spinner        spinner.Model
+	text           string // text shown when spinner is active (e.g., "Thinking...")
+	idleText       string // text shown when spinner is inactive (e.g., working directory)
+	width          int
+	active         bool
+	spinnerType    SpinnerType
+	contextUsagePct float64 // 0 means not yet known
 }
 
 // NewSpinnerBar creates a new SpinnerBar with the specified spinner type.
@@ -149,6 +152,11 @@ func (s *SpinnerBar) NextSpinnerType() {
 	s.SetSpinnerType(SpinnerType(next))
 }
 
+// SetContextUsage updates the context usage percentage.
+func (s *SpinnerBar) SetContextUsage(pct float64) {
+	s.contextUsagePct = pct
+}
+
 // Text returns the current status text.
 func (s SpinnerBar) Text() string {
 	return s.text
@@ -171,16 +179,79 @@ func (s SpinnerBar) Tick() tea.Cmd {
 
 // View renders the spinner bar.
 func (s SpinnerBar) View(styles Styles) string {
-	var content string
+	var left string
 	if s.active {
-		content = s.spinner.View() + " " + s.text
-	} else {
-		content = s.idleText
+		left = s.spinner.View() + " " + s.text
+	}
+
+	// Build right-side segments: cwd • X% context used
+	var rightParts []string
+	if s.idleText != "" {
+		rightParts = append(rightParts, s.idleText)
+	}
+	if s.contextUsagePct > 0 {
+		rightParts = append(rightParts, fmt.Sprintf("%.0f%% context used", s.contextUsagePct))
 	}
 
 	style := styles.SpinnerBar
 	if s.width > 0 {
 		style = style.Width(s.width)
 	}
-	return style.Render(content)
+
+	if len(rightParts) == 0 {
+		return style.Render(left)
+	}
+
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	// Color the context usage segment if present
+	right := s.renderRightParts(rightParts, dimStyle)
+
+	// Available width inside padding
+	pad := style.GetHorizontalPadding()
+	avail := s.width - pad
+	leftWidth := lipgloss.Width(left)
+	rightWidth := lipgloss.Width(right)
+	gap := avail - leftWidth - rightWidth
+	if gap < 1 {
+		return style.Render(left)
+	}
+
+	row := left + lipgloss.NewStyle().Width(gap).Render("") + right
+	return style.Render(row)
+}
+
+func (s SpinnerBar) renderRightParts(parts []string, dimStyle lipgloss.Style) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	// Last part gets context usage coloring if we have context data
+	sep := dimStyle.Render(" • ")
+	var result string
+	for i, part := range parts {
+		if i > 0 {
+			result += sep
+		}
+		if s.contextUsagePct > 0 && i == len(parts)-1 && len(parts) > 1 {
+			// Last part is context usage — color it
+			result += lipgloss.NewStyle().Foreground(contextUsageColor(s.contextUsagePct)).Render(part)
+		} else if s.contextUsagePct > 0 && len(parts) == 1 {
+			// Only context usage, no cwd
+			result += lipgloss.NewStyle().Foreground(contextUsageColor(s.contextUsagePct)).Render(part)
+		} else {
+			result += dimStyle.Render(part)
+		}
+	}
+	return result
+}
+
+// contextUsageColor returns a color based on how full the context is.
+func contextUsageColor(pct float64) lipgloss.Color {
+	switch {
+	case pct >= 80:
+		return lipgloss.Color("196") // red
+	case pct >= 60:
+		return lipgloss.Color("214") // orange
+	default:
+		return lipgloss.Color("244") // dim gray (matches spinner bar)
+	}
 }

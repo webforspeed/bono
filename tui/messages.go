@@ -42,6 +42,11 @@ type AgentErrorMsg struct {
 	Err error
 }
 
+// AgentContextUsageMsg is sent when context usage is updated after an LLM response.
+type AgentContextUsageMsg struct {
+	Pct float64
+}
+
 // SubmitInputMsg is sent internally when the user submits input.
 type SubmitInputMsg struct {
 	Value string

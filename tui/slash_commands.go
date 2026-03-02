@@ -18,7 +18,6 @@ const helpText = `Available commands:
   /help           - Show this help
   /clear          - Clear chat history
   /model          - Show current model
-  /context        - Show context info
   /spinner        - Cycle to next spinner style
   /spinner <type> - Set spinner (dot, line, minidot, jump, pulse, points, globe, moon, monkey, meter, hamburger, ellipsis)
   /exit           - Exit Bono`
@@ -29,7 +28,6 @@ func DefaultSlashCommandSpecs() []SlashCommandSpec {
 		{Name: "help", Description: "Show available commands", Handler: handleHelp},
 		{Name: "clear", Description: "Clear the chat history", Handler: handleClear},
 		{Name: "model", Description: "Switch AI model", Handler: handleModel},
-		{Name: "context", Description: "Show context window info", Handler: handleContext},
 		{Name: "spinner", Description: "Change spinner style", Handler: handleSpinner},
 		{Name: "exit", Description: "Exit Bono", Handler: handleExit},
 	}
@@ -69,12 +67,6 @@ func handleClear(m *Model, arg string) tea.Cmd {
 
 func handleModel(m *Model, arg string) tea.Cmd {
 	m.AppendRawMessage("Model info: (dynamic info coming soon)")
-	m.input.Reset()
-	return nil
-}
-
-func handleContext(m *Model, arg string) tea.Cmd {
-	m.AppendRawMessage("Context info: (dynamic info coming soon)")
 	m.input.Reset()
 	return nil
 }
