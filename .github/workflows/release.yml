@@ -44,7 +44,7 @@ jobs:
           set -euo pipefail
           go mod edit -dropreplace github.com/webforspeed/bono-core || true
           go mod edit -require=github.com/webforspeed/bono-core@${TAG}
-          go mod download
+          go mod download all
 
           version="${TAG#v}"
           artifact="bono_${version}_${GOOS}_${GOARCH}"
