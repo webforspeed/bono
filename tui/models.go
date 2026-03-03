@@ -1,9 +1,7 @@
 package tui
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,19 +16,6 @@ type ModelInfo struct {
 	Capabilities []string `json:"capabilities"`
 	Context      string   `json:"context"`
 	Tier         string   `json:"tier"`
-}
-
-// LoadModelCatalog reads models from a JSON file.
-func LoadModelCatalog(path string) ([]ModelInfo, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var models []ModelInfo
-	if err := json.Unmarshal(data, &models); err != nil {
-		return nil, err
-	}
-	return models, nil
 }
 
 // ModelSelectedMsg is sent when a model is selected from the picker.

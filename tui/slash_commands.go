@@ -73,10 +73,11 @@ func handleClear(m *Model, arg string) tea.Cmd {
 
 func handleModel(m *Model, arg string) tea.Cmd {
 	if len(m.modelModal.models) == 0 {
-		m.AppendRawMessage("No models available. Place a models.json in the project root.")
+		m.AppendRawMessage("No models available. Edit tui/model_catalog.go to configure models.")
 		m.input.Reset()
 		return nil
 	}
+	m.AppendRawMessage("● /model")
 	m.input.Reset()
 	m.modelModal.Show()
 	m.recalculateLayout()

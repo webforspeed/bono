@@ -216,7 +216,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ModelSelectedMsg:
 		m.agent.SetModel(msg.Model.ID)
 		m.spinnerBar.SetRightText(msg.Model.Name)
-		m.AppendRawMessage(fmt.Sprintf("Model switched to: %s (%s)", msg.Model.Name, msg.Model.ID))
+		m.AppendRawMessage(fmt.Sprintf("  ↳ Switched to %s (%s)", msg.Model.Name, msg.Model.ID))
 		m.recalculateLayout()
 
 	case AgentErrorMsg:

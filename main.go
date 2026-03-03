@@ -50,12 +50,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Load model catalog
-	models, err := tui.LoadModelCatalog("models.json")
-	if err != nil {
-		// Non-fatal: catalog is optional, fall back to config default
-		models = nil
-	}
+	// Load model catalog from code.
+	models := tui.DefaultModelCatalog()
 
 	// Model priority: MODEL env var (deprecated) > first model in catalog > bono-core default
 	model := os.Getenv("MODEL")
