@@ -1,15 +1,28 @@
 package tui
 
+import "strings"
+
 // StatusBar displays status information at the bottom of the TUI.
 type StatusBar struct {
 	text  string
 	width int
 }
 
+const statusBarSuffix = "An agent by Webforspeed • /help for commands • Ctrl+C to exit"
+
+// StatusBarText returns the default footer string with version information.
+func StatusBarText(version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" || strings.EqualFold(version, "dev") {
+		return "Bono (dev) - " + statusBarSuffix
+	}
+	return "Bono " + version + " - " + statusBarSuffix
+}
+
 // NewStatusBar creates a new StatusBar with default text.
 func NewStatusBar() StatusBar {
 	return StatusBar{
-		text: "Bono - An agent by Webforspeed • /help for commands • Ctrl+C to exit",
+		text: StatusBarText("dev"),
 	}
 }
 

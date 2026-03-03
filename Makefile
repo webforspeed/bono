@@ -1,30 +1,71 @@
-# Bono CLI Makefile
-BINARY_NAME := bono
-INSTALL_DIR := $(HOME)/.local/bin
+BINARY ?= bono
+BUILD_DIR ?= build
+LOCAL_BIN ?= $(HOME)/.local/bin
+GO ?= go
+TAG_PATTERN ?= ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$$
 
-.PHONY: build test install clean uninstall
+.PHONY: help build test deploy install uninstall clean release
 
-# Build bono-core first, then bono
+help:
+	@echo "Targets:"
+	@echo "  make deploy    Build and install $(BINARY) to $(LOCAL_BIN)"
+	@echo "  make build     Build binary into $(BUILD_DIR)/$(BINARY)"
+	@echo "  make test      Run tests for bono and local bono-core (if present)"
+	@echo "  make release   Tag and push a release (requires TAG=vX.Y.Z)"
+	@echo "  make uninstall Remove $(LOCAL_BIN)/$(BINARY)"
+	@echo "  make clean     Remove build artifacts"
+
 build:
-	cd ../bono-core && go build ./...
-	go build -o $(BINARY_NAME) .
+	@mkdir -p $(BUILD_DIR)
+	$(GO) build -o $(BUILD_DIR)/$(BINARY) .
 
-# Run tests across both repos
 test:
-	cd ../bono-core && go test ./...
+	@$(GO) test ./...
+	@if [ -d ../bono-core ]; then \
+		echo "Running bono-core tests from ../bono-core"; \
+		(cd ../bono-core && $(GO) test ./...); \
+	else \
+		echo "Skipping ../bono-core tests (directory not found)."; \
+	fi
 
-# Test, build, and install to ~/.local/bin
-install: test build
-	@mkdir -p $(INSTALL_DIR)
-	@cp $(BINARY_NAME) $(INSTALL_DIR)/$(BINARY_NAME)
-	@codesign -s - -f $(INSTALL_DIR)/$(BINARY_NAME)
-	@echo "Installed $(BINARY_NAME) to $(INSTALL_DIR)"
+deploy: install
 
-# Remove installed binary
+install: build
+	@mkdir -p $(LOCAL_BIN)
+	@install -m 0755 $(BUILD_DIR)/$(BINARY) $(LOCAL_BIN)/$(BINARY)
+	@echo "Installed $(BINARY) to $(LOCAL_BIN)/$(BINARY)"
+	@if echo ":$$PATH:" | grep -q ":$(LOCAL_BIN):"; then \
+		echo "$(LOCAL_BIN) is already in PATH"; \
+	else \
+		echo "$(LOCAL_BIN) is not in PATH. Add this to your shell config:"; \
+		echo "  export PATH=\"$(LOCAL_BIN):\$$PATH\""; \
+	fi
+
 uninstall:
-	@rm -f $(INSTALL_DIR)/$(BINARY_NAME)
-	@echo "Removed $(BINARY_NAME) from $(INSTALL_DIR)"
+	@rm -f $(LOCAL_BIN)/$(BINARY)
+	@echo "Removed $(LOCAL_BIN)/$(BINARY)"
 
-# Clean local build
 clean:
-	@rm -f $(BINARY_NAME)
+	@rm -rf $(BUILD_DIR)
+
+release:
+	@if [ -z "$(TAG)" ]; then \
+		echo "error: TAG is required. usage: make release TAG=v0.0.1"; \
+		exit 1; \
+	fi
+	@if ! printf "%s" "$(TAG)" | grep -Eq "$(TAG_PATTERN)"; then \
+		echo "error: invalid TAG format: $(TAG)"; \
+		echo "expected format: vX.Y.Z (example: v0.0.1)"; \
+		exit 1; \
+	fi
+	@if git rev-parse -q --verify "refs/tags/$(TAG)" >/dev/null; then \
+		echo "error: local tag already exists: $(TAG)"; \
+		exit 1; \
+	fi
+	@if git ls-remote --tags origin "refs/tags/$(TAG)" | grep -q .; then \
+		echo "error: remote tag already exists on origin: $(TAG)"; \
+		exit 1; \
+	fi
+	@$(MAKE) test
+	git tag -a "$(TAG)" -m "$(BINARY) $(TAG)"
+	git push origin "$(TAG)"

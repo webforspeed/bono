@@ -72,3 +72,8 @@ type IndexDoneMsg struct {
 type WatcherNotifyMsg struct {
 	ChangedCount int
 }
+
+// UpdateBannerMsg updates the status-bar banner with release update information.
+type UpdateBannerMsg struct {
+	Text string
+}

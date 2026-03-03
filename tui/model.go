@@ -26,6 +26,8 @@ type Model struct {
 	styles            Styles
 	slashCommands     []SlashCommandSpec
 	slashCommandIndex map[string]SlashCommandSpec
+	statusBarBaseText string
+	statusBarBanner   string
 
 	// External dependencies
 	agent    *core.Agent
@@ -66,6 +68,7 @@ func NewWithOptions(agent *core.Agent, ctx context.Context, spinnerType SpinnerT
 
 	spinnerBar := NewSpinnerBar(spinnerType)
 	spinnerBar.SetIdleText(cwd)
+	statusBar := NewStatusBar()
 
 	// Show current model name from agent
 	modelName := agent.ModelName()
@@ -84,12 +87,13 @@ func NewWithOptions(agent *core.Agent, ctx context.Context, spinnerType SpinnerT
 		viewport:          viewport.New(80, 20),
 		input:             NewInputBox(),
 		spinnerBar:        spinnerBar,
-		statusBar:         NewStatusBar(),
+		statusBar:         statusBar,
 		slashModal:        NewSlashModal(),
 		modelModal:        NewModelModal(models),
 		styles:            DefaultStyles(),
 		slashCommands:     slashCommands,
 		slashCommandIndex: slashCommandIndex(slashCommands),
+		statusBarBaseText: statusBar.Text(),
 		agent:             agent,
 		ctx:               ctx,
 		renderer:          renderer,
@@ -171,6 +175,29 @@ func (m *Model) SetStatus(text string) {
 // SetStatusText updates index/watch status text in the spinner metadata row.
 func (m *Model) SetStatusText(text string) {
 	m.spinnerBar.SetStatusText(text)
+}
+
+// SetStatusBarText updates the bottom status bar text.
+func (m *Model) SetStatusBarText(text string) {
+	m.statusBarBaseText = text
+	m.refreshStatusBarText()
+}
+
+// SetStatusBarBanner updates the optional footer banner segment.
+func (m *Model) SetStatusBarBanner(text string) {
+	m.statusBarBanner = strings.TrimSpace(text)
+	m.refreshStatusBarText()
+}
+
+func (m *Model) refreshStatusBarText() {
+	text := m.statusBarBaseText
+	if text == "" {
+		text = m.statusBar.Text()
+	}
+	if m.statusBarBanner != "" {
+		text += " • " + m.statusBarBanner
+	}
+	m.statusBar.SetText(text)
 }
 
 // SetSpinnerType changes the spinner style.

@@ -3,7 +3,9 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"runtime"
 	"strconv"
@@ -17,6 +19,11 @@ import (
 )
 
 const systemPromptVersion = "v1.0.5"
+const releaseRepo = "webforspeed/bono"
+const updateCheckTimeout = 3 * time.Second
+
+// version is set at build time via -ldflags "-X main.version=vX.Y.Z".
+var version = "dev"
 
 func main() {
 	loadEnv()
@@ -120,6 +127,7 @@ func main() {
 
 	// Create TUI model
 	tuiModel := tui.NewWithOptions(agent, ctx, tui.SpinnerDot, models)
+	tuiModel.SetStatusBarText(tui.StatusBarText(version))
 
 	var watcher *tui.FileWatcher
 	if w, err := tui.NewFileWatcher(cwd); err == nil {
@@ -142,6 +150,7 @@ func main() {
 	// Create Bubble Tea program (use alt screen for full viewport)
 	p := tea.NewProgram(&tuiModel, tea.WithAltScreen())
 	tuiModel.SetProgram(p)
+	startUpdateCheck(ctx, p, version)
 
 	// Start file watcher
 	if watcher != nil {
@@ -252,4 +261,109 @@ func loadEnv() {
 			os.Setenv(strings.TrimSpace(k), strings.TrimSpace(v))
 		}
 	}
+}
+
+func startUpdateCheck(ctx context.Context, p *tea.Program, currentVersion string) {
+	if os.Getenv("BONO_DISABLE_UPDATE_CHECK") == "1" {
+		return
+	}
+	current := strings.TrimSpace(currentVersion)
+	if current == "" || strings.EqualFold(current, "dev") {
+		return
+	}
+
+	go func(currentTag string) {
+		latest, err := fetchLatestReleaseTag(updateCheckTimeout)
+		if err != nil || latest == "" {
+			return
+		}
+		if !isNewerVersion(latest, currentTag) {
+			return
+		}
+		msg := fmt.Sprintf("new version available: %s (rerun install command)", latest)
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			p.Send(tui.UpdateBannerMsg{Text: msg})
+		}
+	}(current)
+}
+
+func fetchLatestReleaseTag(timeout time.Duration) (string, error) {
+	type latestRelease struct {
+		TagName string `json:"tag_name"`
+	}
+
+	client := &http.Client{Timeout: timeout}
+	req, err := http.NewRequest(http.MethodGet, "https://api.github.com/repos/"+releaseRepo+"/releases/latest", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "bono-update-check")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status: %s", resp.Status)
+	}
+
+	var payload latestRelease
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(payload.TagName), nil
+}
+
+func isNewerVersion(candidate, current string) bool {
+	cMaj, cMin, cPatch, ok := parseSemver(candidate)
+	if !ok {
+		return false
+	}
+	vMaj, vMin, vPatch, ok := parseSemver(current)
+	if !ok {
+		return false
+	}
+
+	if cMaj != vMaj {
+		return cMaj > vMaj
+	}
+	if cMin != vMin {
+		return cMin > vMin
+	}
+	return cPatch > vPatch
+}
+
+func parseSemver(v string) (major, minor, patch int, ok bool) {
+	s := strings.TrimSpace(v)
+	s = strings.TrimPrefix(s, "v")
+	if s == "" {
+		return 0, 0, 0, false
+	}
+
+	parts := strings.SplitN(s, "-", 2)
+	core := parts[0]
+	seg := strings.Split(core, ".")
+	if len(seg) != 3 {
+		return 0, 0, 0, false
+	}
+
+	maj, err := strconv.Atoi(seg[0])
+	if err != nil {
+		return 0, 0, 0, false
+	}
+	min, err := strconv.Atoi(seg[1])
+	if err != nil {
+		return 0, 0, 0, false
+	}
+	pat, err := strconv.Atoi(seg[2])
+	if err != nil {
+		return 0, 0, 0, false
+	}
+	return maj, min, pat, true
 }

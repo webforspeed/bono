@@ -245,6 +245,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.SetStatusText(fmt.Sprintf("%d files changed since last index. Run /index to update.", msg.ChangedCount))
 		}
 
+	case UpdateBannerMsg:
+		m.SetStatusBarBanner(msg.Text)
+
 	case AgentResponseMsg:
 		m.processing = false
 		m.spinnerBar.SetActive(false)
