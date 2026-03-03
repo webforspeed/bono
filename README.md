@@ -3,7 +3,7 @@
 A terminal coding agent frontend written in Go. Bono provides the TUI, slash-command UX, and tool approval flow, while `bono-core` handles the agent loop and tool execution.
 
 ## Screenshot
-![bono screenshot](https://your-screenshot-link-here)
+![bono screenshot](./docs/assets/screenshot.png)
 
 ## Features
 - **Slash:** Slash-command-first UX (`/init`, `/index`, `/model`, `/spinner`, `/clear`, `/help`, `/exit`)
