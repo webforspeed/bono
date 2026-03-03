@@ -1,4 +1,4 @@
-# bono - A Go Coding Agent TUI
+# bono - An autonomous agent in the terminal
 
 A terminal coding agent frontend written in Go. Bono provides the TUI, slash-command UX, and tool approval flow, while `bono-core` handles the agent loop and tool execution.
 
