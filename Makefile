@@ -78,8 +78,8 @@ release:
 			echo "error: $(CORE_DIR) has no git origin remote configured."; \
 			exit 1; \
 		fi; \
-		if [ -n "$$(git -C "$(CORE_DIR)" status --porcelain)" ]; then \
-			echo "error: $(CORE_DIR) has uncommitted changes. commit/stash before release."; \
+		if ! git -C "$(CORE_DIR)" diff --quiet || ! git -C "$(CORE_DIR)" diff --cached --quiet; then \
+			echo "error: $(CORE_DIR) has tracked uncommitted changes. commit/stash before release."; \
 			exit 1; \
 		fi; \
 		if ! git -C "$(CORE_DIR)" rev-parse -q --verify "refs/tags/$(TAG)" >/dev/null; then \
