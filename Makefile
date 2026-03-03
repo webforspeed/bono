@@ -3,6 +3,8 @@ BUILD_DIR ?= build
 LOCAL_BIN ?= $(HOME)/.local/bin
 GO ?= go
 TAG_PATTERN ?= ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$$
+CORE_DIR ?= ../bono-core
+CORE_REPO_URL ?= https://github.com/webforspeed/bono-core.git
 
 .PHONY: help build test deploy install uninstall clean release
 
@@ -66,10 +68,24 @@ release:
 		echo "error: remote tag already exists on origin: $(TAG)"; \
 		exit 1; \
 	fi
-	@if ! git ls-remote --tags https://github.com/webforspeed/bono-core.git "refs/tags/$(TAG)" | grep -q .; then \
-		echo "error: github.com/webforspeed/bono-core is missing tag $(TAG)"; \
-		echo "release bono-core with the same tag first, then run make release here."; \
-		exit 1; \
+	@if ! git ls-remote --tags "$(CORE_REPO_URL)" "refs/tags/$(TAG)" | grep -q .; then \
+		if [ ! -d "$(CORE_DIR)/.git" ]; then \
+			echo "error: bono-core tag $(TAG) is missing and $(CORE_DIR) is not available."; \
+			echo "clone bono-core at $(CORE_DIR) or create the tag manually in bono-core first."; \
+			exit 1; \
+		fi; \
+		if ! git -C "$(CORE_DIR)" remote get-url origin >/dev/null 2>&1; then \
+			echo "error: $(CORE_DIR) has no git origin remote configured."; \
+			exit 1; \
+		fi; \
+		if [ -n "$$(git -C "$(CORE_DIR)" status --porcelain)" ]; then \
+			echo "error: $(CORE_DIR) has uncommitted changes. commit/stash before release."; \
+			exit 1; \
+		fi; \
+		if ! git -C "$(CORE_DIR)" rev-parse -q --verify "refs/tags/$(TAG)" >/dev/null; then \
+			git -C "$(CORE_DIR)" tag -a "$(TAG)" -m "bono-core $(TAG)"; \
+		fi; \
+		git -C "$(CORE_DIR)" push origin "$(TAG)"; \
 	fi
 	@$(MAKE) test
 	git tag -a "$(TAG)" -m "$(BINARY) $(TAG)"
