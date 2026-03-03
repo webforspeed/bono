@@ -37,3 +37,6 @@ logs/
 # Debug
 debug
 __debug_bin*
+
+# Index
+.bono/

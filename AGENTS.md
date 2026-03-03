@@ -21,12 +21,14 @@ All code changes related hooks, TUI and user facing behaviors should be done in 
 > Learning-oriented. Follow along from start to finish.
 
 - [Designing with progressive disclosure](./docs/tutorials/design-with-progressive-disclosure)
+- [Semantic code search technical walkthrough](./docs/tutorials/semantic-code-search-technical-walkthrough.md)
 ### Explanation
 > Understanding-oriented. Architecture, design decisions, and "why."
 
 - [How system prompts work in Bono agent](./docs/explaination/system-prompt-lifecycle.md)
 - [How tools work in Bono agent](./docs/explaination/tool-design.md)
 - [How context engineering works in this harness](./docs/explaination/bono-context-enginerring-guide.md)
+- [How semantic code search works](./docs/explaination/semantic-code-search.md)
 
 ## IMPORTANT RULES
 

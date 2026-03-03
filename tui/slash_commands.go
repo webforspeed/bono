@@ -15,6 +15,7 @@ type SlashCommandSpec struct {
 
 const helpText = `Available commands:
   /init           - Run exploring agent
+  /index          - Index codebase for semantic code search
   /help           - Show this help
   /clear          - Clear chat history
   /model          - Show current model
@@ -25,6 +26,7 @@ const helpText = `Available commands:
 func DefaultSlashCommandSpecs() []SlashCommandSpec {
 	return []SlashCommandSpec{
 		{Name: "init", Description: "Run exploring agent", Handler: handleInit},
+		{Name: "index", Description: "Index codebase for semantic search", Handler: handleIndex},
 		{Name: "help", Description: "Show available commands", Handler: handleHelp},
 		{Name: "clear", Description: "Clear the chat history", Handler: handleClear},
 		{Name: "model", Description: "Switch AI model", Handler: handleModel},
@@ -103,6 +105,52 @@ func handleSpinner(m *Model, arg string) tea.Cmd {
 func handleExit(m *Model, arg string) tea.Cmd {
 	m.input.Reset()
 	return tea.Quit
+}
+
+func handleIndex(m *Model, arg string) tea.Cmd {
+	if m.processing {
+		return nil
+	}
+
+	m.AppendRawMessage("● /index")
+
+	codeSearchService := m.agent.CodeSearchService()
+	if codeSearchService == nil {
+		m.AppendRawMessage("  ↳ Code search engine not initialized. Check configuration.")
+		m.input.Reset()
+		return nil
+	}
+
+	m.input.Reset()
+	m.processing = true
+	m.spinnerBar.SetText("Indexing codebase...")
+	m.spinnerBar.SetActive(true)
+
+	ctx := m.ctx
+	prog := m.program
+
+	return tea.Batch(
+		m.spinnerBar.Tick(),
+		func() tea.Msg {
+			stats, err := codeSearchService.CodeSearchIndex(ctx, ".", core.CodeSearchIndexOptions{},
+				func(p core.CodeSearchIndexProgress) {
+					if prog != nil {
+						prog.Send(IndexProgressMsg{
+							Phase:      p.Phase,
+							FilesDone:  p.FilesDone,
+							FilesTotal: p.FilesTotal,
+						})
+					}
+				},
+			)
+			return IndexDoneMsg{
+				Err:         err,
+				TotalFiles:  stats.TotalFiles,
+				TotalChunks: stats.TotalChunks,
+				Duration:    stats.Duration.Seconds(),
+			}
+		},
+	)
 }
 
 func (m *Model) runExploringPreTask() tea.Cmd {

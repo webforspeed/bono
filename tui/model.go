@@ -43,6 +43,9 @@ type Model struct {
 	// Tool approval state
 	pendingApproval        *AgentToolCallMsg        // current tool awaiting Enter/Esc
 	pendingSandboxFallback *AgentSandboxFallbackMsg // sandbox fallback awaiting Enter/Esc
+
+	// Code search watcher metadata
+	watcher *FileWatcher
 }
 
 // New creates a new TUI Model with the given agent and context.
@@ -165,6 +168,11 @@ func (m *Model) SetStatus(text string) {
 	m.spinnerBar.SetText(text)
 }
 
+// SetStatusText updates index/watch status text in the spinner metadata row.
+func (m *Model) SetStatusText(text string) {
+	m.spinnerBar.SetStatusText(text)
+}
+
 // SetSpinnerType changes the spinner style.
 func (m *Model) SetSpinnerType(t SpinnerType) {
 	m.spinnerBar.SetSpinnerType(t)
@@ -193,6 +201,11 @@ func (m *Model) SetProgram(p *tea.Program) {
 // IsProcessing returns whether the agent is currently processing.
 func (m Model) IsProcessing() bool {
 	return m.processing
+}
+
+// SetWatcher sets the file watcher for change notifications.
+func (m *Model) SetWatcher(w *FileWatcher) {
+	m.watcher = w
 }
 
 // AgentResponseMsg is sent when the agent finishes processing.

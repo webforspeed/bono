@@ -222,6 +222,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AgentErrorMsg:
 		m.AppendRawMessage(fmt.Sprintf("Error: %v", msg.Err))
 
+	case IndexProgressMsg:
+		m.spinnerBar.SetText(fmt.Sprintf("Indexing: %s (%d/%d files)", msg.Phase, msg.FilesDone, msg.FilesTotal))
+
+	case IndexDoneMsg:
+		m.processing = false
+		m.spinnerBar.SetActive(false)
+		if msg.Err != nil {
+			m.AppendRawMessage(fmt.Sprintf("  ↳ Indexing failed: %v", msg.Err))
+		} else {
+			m.AppendRawMessage(fmt.Sprintf("  ↳ Index complete: %d chunks across %d files (%.1fs)",
+				msg.TotalChunks, msg.TotalFiles, msg.Duration))
+			m.SetStatusText(fmt.Sprintf("Index: %d chunks across %d files. Ready.", msg.TotalChunks, msg.TotalFiles))
+		}
+		// Reset watcher's changed file list since we just indexed
+		if m.watcher != nil {
+			m.watcher.Reset()
+		}
+
+	case WatcherNotifyMsg:
+		if msg.ChangedCount > 0 {
+			m.SetStatusText(fmt.Sprintf("%d files changed since last index. Run /index to update.", msg.ChangedCount))
+		}
+
 	case AgentResponseMsg:
 		m.processing = false
 		m.spinnerBar.SetActive(false)
@@ -297,6 +320,13 @@ func formatTool(name string, args map[string]any) string {
 		return fmt.Sprintf("Python(%s) # %s, %s", code, desc, safety)
 	case "compact_context":
 		return "Compact(context)"
+	case "code_search":
+		query, _ := args["query"].(string)
+		searchType, _ := args["search_type"].(string)
+		if searchType == "" {
+			searchType = "semantic"
+		}
+		return fmt.Sprintf("Search('%s', %s)", query, searchType)
 	default:
 		return name
 	}

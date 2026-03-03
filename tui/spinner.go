@@ -89,6 +89,7 @@ type SpinnerBar struct {
 	spinner         spinner.Model
 	text            string // text shown when spinner is active (e.g., "Thinking...")
 	idleText        string // text shown when spinner is inactive (e.g., working directory)
+	statusText      string // index/file-change status shown on the right metadata row
 	rightText       string // text shown on right side (e.g., model name)
 	width           int
 	active          bool
@@ -120,6 +121,11 @@ func (s *SpinnerBar) SetText(text string) {
 // SetIdleText updates the text shown when spinner is inactive (e.g., working directory).
 func (s *SpinnerBar) SetIdleText(text string) {
 	s.idleText = text
+}
+
+// SetStatusText updates index/watch status shown in the right metadata row.
+func (s *SpinnerBar) SetStatusText(text string) {
+	s.statusText = text
 }
 
 // SetRightText sets the right-aligned text (e.g., model name).
@@ -196,7 +202,7 @@ func (s SpinnerBar) View(styles Styles) string {
 		left = s.spinner.View() + " " + s.text
 	}
 
-	// Build right-side segments: context used • cost • CWD • model
+	// Build right-side segments: context used • cost • CWD • status • model
 	var rightParts []string
 	if s.contextUsagePct > 0 {
 		rightParts = append(rightParts, fmt.Sprintf("%.0f%% context used", s.contextUsagePct))
@@ -206,6 +212,9 @@ func (s SpinnerBar) View(styles Styles) string {
 	}
 	if s.idleText != "" {
 		rightParts = append(rightParts, s.idleText)
+	}
+	if s.statusText != "" {
+		rightParts = append(rightParts, s.statusText)
 	}
 
 	style := styles.SpinnerBar

@@ -52,3 +52,23 @@ type AgentContextUsageMsg struct {
 type SubmitInputMsg struct {
 	Value string
 }
+
+// IndexProgressMsg is sent during codebase indexing to report progress.
+type IndexProgressMsg struct {
+	Phase      string
+	FilesDone  int
+	FilesTotal int
+}
+
+// IndexDoneMsg is sent when indexing completes (or fails).
+type IndexDoneMsg struct {
+	Err         error
+	TotalFiles  int
+	TotalChunks int
+	Duration    float64 // seconds
+}
+
+// WatcherNotifyMsg is sent when the file watcher detects changes since last index.
+type WatcherNotifyMsg struct {
+	ChangedCount int
+}

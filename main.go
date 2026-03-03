@@ -62,6 +62,12 @@ func main() {
 	if model == "" && len(models) > 0 {
 		model = models[0].ID
 	}
+	embeddingDims := 0
+	if n := os.Getenv("EMBEDDING_DIMS"); n != "" {
+		if v, err := strconv.Atoi(n); err == nil && v > 0 {
+			embeddingDims = v
+		}
+	}
 
 	config := core.Config{
 		APIKey:       os.Getenv("OPENROUTER_API_KEY"),
@@ -69,6 +75,11 @@ func main() {
 		Model:        model,
 		SystemPrompt: systemPrompt,
 		HTTPTimeout:  120 * time.Second,
+		CodeSearch: &core.CodeSearchConfig{
+			DBPath: ".bono/index.db",
+			Model:  os.Getenv("EMBEDDING_MODEL"),
+			Dims:   embeddingDims,
+		},
 	}
 	if n := os.Getenv("API_TIMEOUT_SEC"); n != "" {
 		if v, err := strconv.Atoi(n); err == nil && v > 0 {
@@ -95,19 +106,57 @@ func main() {
 		fmt.Printf("Error creating agent: %v\n", err)
 		os.Exit(1)
 	}
+	defer func() {
+		if err := agent.Close(); err != nil {
+			fmt.Printf("Warning: failed to close agent resources: %v\n", err)
+		}
+	}()
 
 	// Create context
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := agent.CodeSearchInitError(); err != nil {
+		fmt.Printf("Warning: code search unavailable: %v\n", err)
+	} else if svc := agent.CodeSearchService(); svc != nil && !svc.CodeSearchSupportsVector() {
+		fmt.Println("Warning: sqlite-vec unavailable; code search is running in text-only mode.")
+	}
 
 	// Create TUI model
 	tuiModel := tui.NewWithOptions(agent, ctx, tui.SpinnerDot, models)
 
+	var watcher *tui.FileWatcher
+	if w, err := tui.NewFileWatcher(cwd); err == nil {
+		watcher = w
+		tuiModel.SetWatcher(watcher)
+	}
+
+	// Set initial index status on status bar
+	if svc := agent.CodeSearchService(); svc != nil {
+		stats, err := svc.CodeSearchStats()
+		if err != nil || stats.TotalChunks == 0 {
+			tuiModel.SetStatusText("No index found. Run /index to enable semantic code search.")
+		} else {
+			tuiModel.SetStatusText(fmt.Sprintf("Index: %d chunks across %d files. Ready.", stats.TotalChunks, stats.TotalFiles))
+		}
+	} else {
+		tuiModel.SetStatusText("Code search unavailable. Check configuration.")
+	}
+
 	// Create Bubble Tea program (use alt screen for full viewport)
-	p := tea.NewProgram(tuiModel, tea.WithAltScreen())
+	p := tea.NewProgram(&tuiModel, tea.WithAltScreen())
+	tuiModel.SetProgram(p)
+
+	// Start file watcher
+	if watcher != nil {
+		go watcher.Start(ctx, func(count int) {
+			p.Send(tui.WatcherNotifyMsg{ChangedCount: count})
+		})
+	}
 
 	// Set up agent hooks to send messages to TUI
 	agent.OnToolCall = func(name string, args map[string]any) bool {
-		if name == "read_file" || name == "compact_context" {
+		if name == "read_file" || name == "compact_context" || name == "code_search" {
 			// Auto-approve reads and context compaction
 			p.Send(tui.AgentToolCallMsg{Name: name, Args: args})
 			return true
