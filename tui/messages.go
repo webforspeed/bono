@@ -48,6 +48,12 @@ type AgentContextUsageMsg struct {
 	TotalCost float64
 }
 
+// ModelWarmDoneMsg is sent after background warm-up of usage limits for a switched model.
+type ModelWarmDoneMsg struct {
+	ModelID string
+	Err     error
+}
+
 // SubmitInputMsg is sent internally when the user submits input.
 type SubmitInputMsg struct {
 	Value string

@@ -1,9 +1,11 @@
 package tui
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -218,6 +220,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinnerBar.SetRightText(msg.Model.Name)
 		m.AppendRawMessage(fmt.Sprintf("  ↳ Switched to %s (%s)", msg.Model.Name, msg.Model.ID))
 		m.recalculateLayout()
+		modelID := msg.Model.ID
+		cmds = append(cmds, func() tea.Msg {
+			warmCtx, cancel := context.WithTimeout(m.ctx, 10*time.Second)
+			defer cancel()
+			err := m.agent.WarmModelUsageLimits(warmCtx, modelID)
+			return ModelWarmDoneMsg{ModelID: modelID, Err: err}
+		})
+
+	case ModelWarmDoneMsg:
+		// Ignore warm-up results for models that are no longer active.
+		if m.agent.ModelName() != msg.ModelID {
+			break
+		}
+		if msg.Err != nil {
+			m.AppendRawMessage(fmt.Sprintf("  ↳ Warning: couldn't load usage limits for %s; context %% may be unavailable (%v)", msg.ModelID, msg.Err))
+		}
 
 	case AgentErrorMsg:
 		m.AppendRawMessage(fmt.Sprintf("Error: %v", msg.Err))
