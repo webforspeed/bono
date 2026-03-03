@@ -43,6 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           go mod edit -dropreplace github.com/webforspeed/bono-core || true
+          go mod edit -require=github.com/webforspeed/bono-core@${TAG}
           go mod download
 
           version="${TAG#v}"

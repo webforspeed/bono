@@ -66,6 +66,11 @@ release:
 		echo "error: remote tag already exists on origin: $(TAG)"; \
 		exit 1; \
 	fi
+	@if ! git ls-remote --tags https://github.com/webforspeed/bono-core.git "refs/tags/$(TAG)" | grep -q .; then \
+		echo "error: github.com/webforspeed/bono-core is missing tag $(TAG)"; \
+		echo "release bono-core with the same tag first, then run make release here."; \
+		exit 1; \
+	fi
 	@$(MAKE) test
 	git tag -a "$(TAG)" -m "$(BINARY) $(TAG)"
 	git push origin "$(TAG)"
