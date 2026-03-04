@@ -60,8 +60,11 @@ func main() {
 	// Load model catalog from code.
 	models := tui.DefaultModelCatalog()
 
-	// Model priority: MODEL env var (deprecated) > first model in catalog > bono-core default
+	// Model priority: MODEL env var (deprecated) > openrouter/free > first model in catalog > bono-core default
 	model := os.Getenv("MODEL")
+	if model == "" {
+		model = "openrouter/free"
+	}
 	if model == "" && len(models) > 0 {
 		model = models[0].ID
 	}
