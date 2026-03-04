@@ -14,6 +14,9 @@ type Styles struct {
 	// Status bar (bottom)
 	StatusBar lipgloss.Style
 
+	// Reasoning text (dimmed italic)
+	Reasoning lipgloss.Style
+
 	// Slash modal
 	SlashModal        lipgloss.Style
 	SlashItem         lipgloss.Style
@@ -41,6 +44,10 @@ func DefaultStyles() Styles {
 		StatusBar: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("241")).
 			Padding(0, 1),
+
+		Reasoning: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("244")).
+			Italic(true),
 
 		SlashModal: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).

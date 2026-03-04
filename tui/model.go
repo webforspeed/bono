@@ -14,12 +14,13 @@ import (
 // Model is the main Bubble Tea model that composes all TUI components.
 type Model struct {
 	// Composed components
-	viewport   viewport.Model
-	input      InputBox
-	spinnerBar SpinnerBar
-	statusBar  StatusBar
-	slashModal SlashModal
-	modelModal ModelModal
+	viewport       viewport.Model
+	input          InputBox
+	spinnerBar     SpinnerBar
+	statusBar      StatusBar
+	slashModal     SlashModal
+	modelModal     ModelModal
+	reasoningModal ReasoningModal
 
 	// Shared state
 	messages          []string
@@ -48,6 +49,11 @@ type Model struct {
 
 	// Code search watcher metadata
 	watcher *FileWatcher
+
+	// Streaming state
+	streamingContent   string // accumulates content deltas
+	streamingReasoning string // accumulates reasoning deltas
+	isStreaming         bool  // true while streaming response in progress
 }
 
 // New creates a new TUI Model with the given agent and context.
@@ -90,6 +96,7 @@ func NewWithOptions(agent *core.Agent, ctx context.Context, spinnerType SpinnerT
 		statusBar:         statusBar,
 		slashModal:        NewSlashModal(),
 		modelModal:        NewModelModal(models),
+		reasoningModal:    NewReasoningModal(),
 		styles:            DefaultStyles(),
 		slashCommands:     slashCommands,
 		slashCommandIndex: slashCommandIndex(slashCommands),
@@ -132,6 +139,29 @@ func (m *Model) updateViewportContent() {
 	m.viewport.GotoBottom()
 }
 
+// updateStreamingView updates the viewport with the current streaming content.
+// Shows raw text during streaming (no markdown) for speed.
+func (m *Model) updateStreamingView() {
+	content := m.streamingContent
+
+	// Show reasoning dimmed above content if present.
+	var display string
+	if reasoning := m.streamingReasoning; reasoning != "" {
+		dimStyle := m.styles.Reasoning
+		display = dimStyle.Render("Thinking: "+reasoning) + "\n\n"
+	}
+	display += content
+
+	// Replace or append the streaming placeholder in messages.
+	if len(m.messages) > 0 && m.isStreaming {
+		m.messages[len(m.messages)-1] = display
+	} else {
+		m.messages = append(m.messages, display)
+		m.isStreaming = true
+	}
+	m.updateViewportContent()
+}
+
 // recalculateLayout recomputes component sizes based on current dimensions.
 func (m *Model) recalculateLayout() {
 	if !m.ready {
@@ -144,6 +174,7 @@ func (m *Model) recalculateLayout() {
 	statusHeight := 1  // Status bar
 	slashHeight := m.slashModal.Height()
 	modelHeight := m.modelModal.Height()
+	reasoningHeight := m.reasoningModal.Height()
 
 	// Set component widths
 	m.spinnerBar.SetWidth(m.width)
@@ -151,10 +182,11 @@ func (m *Model) recalculateLayout() {
 	m.statusBar.SetWidth(m.width)
 	m.slashModal.SetWidth(m.width)
 	m.modelModal.SetWidth(m.width)
+	m.reasoningModal.SetWidth(m.width)
 
 	// Viewport gets remaining space
 	m.viewport.Width = m.width
-	height := m.height - spinnerHeight - inputHeight - statusHeight - slashHeight - modelHeight
+	height := m.height - spinnerHeight - inputHeight - statusHeight - slashHeight - modelHeight - reasoningHeight
 	if height < 1 {
 		height = 1
 	}
