@@ -15,6 +15,7 @@ A terminal coding agent frontend written in Go. Bono provides the TUI, slash-com
 - **Compaction:** Intelligent context compaction to reduce risk of hitting context limits
 - **Telemetry:** Live context and cost telemetry in the TUI
 - **Models:** Switch LLMs at runtime via slash command (`/model`)
+- **Web:** Live web access via `WebSearch` (search mode returns ranked URLs, answer mode returns a synthesized answer with citations) and `WebFetch` (reads and summarizes a URL). Auto-routes between modes using a fast LLM classifier; model can override with `mode="search"` or `mode="answer"`
 
 ## Tools
 - `read_file`: read file contents
@@ -23,6 +24,8 @@ A terminal coding agent frontend written in Go. Bono provides the TUI, slash-com
 - `run_shell`: run shell commands (sandbox-aware)
 - `python_runtime`: execute Python snippets (sandbox-aware)
 - `code_search`: semantic/hybrid/exact code search
+- `web_search`: live web search — returns ranked URLs (search mode) or synthesized answer with citations (answer mode); auto-classified if mode omitted
+- `web_fetch`: fetch and summarize a URL, optionally focused on a specific question
 - `compact_context`: compact long conversation context
 
 ## Install (GitHub Releases)
