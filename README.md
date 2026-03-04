@@ -15,6 +15,8 @@ A terminal coding agent frontend written in Go. Bono provides the TUI, slash-com
 - **Compaction:** Intelligent context compaction to reduce risk of hitting context limits
 - **Telemetry:** Live context and cost telemetry in the TUI
 - **Models:** Switch LLMs at runtime via slash command (`/model`)
+- **Reasoning:** Configurable reasoning effort via `/reasoning` — supports `minimal`, `low`, `medium`, `high`, and `xhigh` levels.
+- **Streaming:** Live token-by-token response streaming with real-time reasoning and content deltas
 - **Web:** Live web access via `WebSearch` (search mode returns ranked URLs, answer mode returns a synthesized answer with citations) and `WebFetch` (reads and summarizes a URL). Auto-routes between modes using a fast LLM classifier; model can override with `mode="search"` or `mode="answer"`
 
 ## Tools
@@ -71,6 +73,7 @@ go run .
 - `/help`: show commands
 - `/clear`: clear chat history and reset cost/context meter
 - `/model`: open model selector
+- `/reasoning`: open reasoning effort picker (or set directly: `/reasoning high`, `/reasoning none`)
 - `/spinner`: cycle spinner style (or set explicit type)
 - `/exit`: exit Bono
 
