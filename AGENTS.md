@@ -30,6 +30,7 @@ All code changes related hooks, TUI and user facing behaviors should be done in 
 - [How tools work in Bono agent](./docs/explaination/tool-design.md)
 - [How context engineering works in this harness](./docs/explaination/bono-context-enginerring-guide.md)
 - [How semantic code search works](./docs/explaination/semantic-code-search.md)
+- [How web search works in Bono](./docs/explaination/web-search-tool.md)
 
 ## IMPORTANT RULES
 
@@ -50,7 +51,9 @@ All code changes related hooks, TUI and user facing behaviors should be done in 
 > Below is the roadmap of features that is being planned to be added. Use this as context so when writing code, its easily extensible for below features without too much refactoring
 
 - Semantic code search using vector indexing tool
+- web mode
 - plan mode tool
 - askusequestion tool
 - todo write tool
 - guardrails like forceful compaction on certain conditions
+- Press tab to change modes (modes are subagent like plan mode, build mode, code review mode, documentation mode etx... / commands)
