@@ -83,6 +83,10 @@ func main() {
 			Model:  os.Getenv("EMBEDDING_MODEL"),
 			Dims:   embeddingDims,
 		},
+		Web: &core.WebConfig{
+			Model:        envOr("WEB_ANSWER_MODEL", "perplexity/sonar"),
+			SearchEngine: envOr("WEB_SEARCH_ENGINE", "exa"),
+		},
 	}
 	if n := os.Getenv("API_TIMEOUT_SEC"); n != "" {
 		if v, err := strconv.Atoi(n); err == nil && v > 0 {
@@ -124,6 +128,9 @@ func main() {
 	} else if svc := agent.CodeSearchService(); svc != nil && !svc.CodeSearchSupportsVector() {
 		fmt.Println("Warning: sqlite-vec unavailable; code search is running in text-only mode.")
 	}
+	if err := agent.WebInitError(); err != nil {
+		fmt.Printf("Warning: web tools unavailable: %v\n", err)
+	}
 
 	// Create TUI model
 	tuiModel := tui.NewWithOptions(agent, ctx, tui.SpinnerDot, models)
@@ -161,8 +168,8 @@ func main() {
 
 	// Set up agent hooks to send messages to TUI
 	agent.OnToolCall = func(name string, args map[string]any) bool {
-		if name == "read_file" || name == "compact_context" || name == "code_search" {
-			// Auto-approve reads and context compaction
+		if name == "read_file" || name == "compact_context" || name == "code_search" || name == "WebSearch" || name == "WebFetch" {
+			// Auto-approve read-only tools
 			p.Send(tui.AgentToolCallMsg{Name: name, Args: args})
 			return true
 		}
@@ -243,6 +250,13 @@ func main() {
 		fmt.Printf("Error running TUI: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
 
 func loadEnv() {

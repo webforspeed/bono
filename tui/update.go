@@ -348,6 +348,20 @@ func formatTool(name string, args map[string]any) string {
 			searchType = "semantic"
 		}
 		return fmt.Sprintf("Search('%s', %s)", query, searchType)
+	case "WebSearch":
+		query, _ := args["query"].(string)
+		mode, _ := args["mode"].(string)
+		if mode != "" {
+			return fmt.Sprintf("WebSearch('%s', %s)", query, mode)
+		}
+		return fmt.Sprintf("WebSearch('%s')", query)
+	case "WebFetch":
+		url, _ := args["url"].(string)
+		question, _ := args["question"].(string)
+		if question != "" {
+			return fmt.Sprintf("WebFetch('%s', '%s')", url, question)
+		}
+		return fmt.Sprintf("WebFetch('%s')", url)
 	default:
 		return name
 	}
