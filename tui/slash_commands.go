@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -14,14 +15,15 @@ type SlashCommandSpec struct {
 }
 
 const helpText = `Available commands:
-  /init           - Run exploring agent
-  /index          - Index codebase for semantic code search
-  /help           - Show this help
-  /clear          - Clear chat history
-  /model          - Show current model
-  /spinner        - Cycle to next spinner style
-  /spinner <type> - Set spinner (dot, line, minidot, jump, pulse, points, globe, moon, monkey, meter, hamburger, ellipsis)
-  /exit           - Exit Bono`
+  /init              - Run exploring agent
+  /index             - Index codebase for semantic code search
+  /help              - Show this help
+  /clear             - Clear chat history
+  /model             - Show current model
+  /reasoning <level> - Set reasoning effort (xhigh/high/medium/low/minimal/none)
+  /spinner           - Cycle to next spinner style
+  /spinner <type>    - Set spinner (dot, line, minidot, jump, pulse, points, globe, moon, monkey, meter, hamburger, ellipsis)
+  /exit              - Exit Bono`
 
 func DefaultSlashCommandSpecs() []SlashCommandSpec {
 	return []SlashCommandSpec{
@@ -30,6 +32,7 @@ func DefaultSlashCommandSpecs() []SlashCommandSpec {
 		{Name: "help", Description: "Show available commands", Handler: handleHelp},
 		{Name: "clear", Description: "Clear the chat history", Handler: handleClear},
 		{Name: "model", Description: "Switch AI model", Handler: handleModel},
+		{Name: "reasoning", Description: "Set reasoning effort level", Handler: handleReasoning},
 		{Name: "spinner", Description: "Change spinner style", Handler: handleSpinner},
 		{Name: "exit", Description: "Exit Bono", Handler: handleExit},
 	}
@@ -80,6 +83,36 @@ func handleModel(m *Model, arg string) tea.Cmd {
 	m.AppendRawMessage("● /model")
 	m.input.Reset()
 	m.modelModal.Show()
+	m.recalculateLayout()
+	return nil
+}
+
+func handleReasoning(m *Model, arg string) tea.Cmd {
+	arg = strings.TrimSpace(strings.ToLower(arg))
+
+	// With argument: set directly without modal.
+	if arg != "" {
+		valid := map[string]bool{"xhigh": true, "high": true, "medium": true, "low": true, "minimal": true, "none": true}
+		if !valid[arg] {
+			m.AppendRawMessage("  Invalid reasoning effort. Use: xhigh, high, medium, low, minimal, none")
+			m.input.Reset()
+			return nil
+		}
+		if arg == "none" {
+			m.agent.SetReasoningEffort("")
+			m.AppendRawMessage("  Reasoning effort: disabled")
+		} else {
+			m.agent.SetReasoningEffort(arg)
+			m.AppendRawMessage(fmt.Sprintf("  Reasoning effort: %s", arg))
+		}
+		m.input.Reset()
+		return nil
+	}
+
+	// No argument: show modal picker.
+	m.AppendRawMessage("● /reasoning")
+	m.input.Reset()
+	m.reasoningModal.Show(m.agent.ReasoningEffort())
 	m.recalculateLayout()
 	return nil
 }

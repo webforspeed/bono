@@ -26,6 +26,17 @@ func (m Model) View() string {
 		)
 	}
 
+	if m.reasoningModal.IsActive() {
+		modalView := m.reasoningModal.View(m.styles)
+		return lipgloss.JoinVertical(lipgloss.Left,
+			viewportView,
+			modalView,
+			spinnerView,
+			inputView,
+			statusView,
+		)
+	}
+
 	if m.slashModal.IsActive() {
 		slashView := m.slashModal.View(m.styles)
 		return lipgloss.JoinVertical(lipgloss.Left,

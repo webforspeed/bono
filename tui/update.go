@@ -44,6 +44,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Reasoning modal gets keys when active
+		if m.reasoningModal.IsActive() {
+			if cmd, handled := m.reasoningModal.HandleKey(msg); handled {
+				m.recalculateLayout()
+				if cmd != nil {
+					return m, cmd
+				}
+				return m, nil
+			}
+		}
+
 		// Slash modal gets first chance at keys when active
 		if m.slashModal.IsActive() {
 			if selected, handled := m.slashModal.HandleKey(msg); handled {
@@ -127,11 +138,49 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
+	// Streaming deltas
+	case AgentContentDeltaMsg:
+		m.streamingContent += string(msg)
+		m.updateStreamingView()
+
+	case AgentReasoningDeltaMsg:
+		m.streamingReasoning += string(msg)
+		m.updateStreamingView()
+
 	// Agent messages
 	case AgentMessageMsg:
+		// If streaming was active, replace the raw placeholder with final markdown render.
+		if m.isStreaming {
+			m.isStreaming = false
+			if len(m.messages) > 0 {
+				m.messages = m.messages[:len(m.messages)-1]
+			}
+			// Preserve reasoning as a separate styled message above the response.
+			if m.streamingReasoning != "" {
+				m.messages = append(m.messages, m.styles.Reasoning.Render("Thinking: "+m.streamingReasoning))
+			}
+			m.streamingContent = ""
+			m.streamingReasoning = ""
+		}
 		m.AppendMessage(string(msg))
 
 	case AgentToolCallMsg:
+		// Finalize streaming if active (model emitted text before tool calls).
+		if m.isStreaming {
+			m.isStreaming = false
+			if len(m.messages) > 0 {
+				m.messages = m.messages[:len(m.messages)-1]
+			}
+			// Preserve reasoning as a separate styled message.
+			if m.streamingReasoning != "" {
+				m.messages = append(m.messages, m.styles.Reasoning.Render("Thinking: "+m.streamingReasoning))
+			}
+			if content := m.streamingContent; content != "" {
+				m.AppendMessage(content)
+			}
+			m.streamingContent = ""
+			m.streamingReasoning = ""
+		}
 		prompt := formatTool(msg.Name, msg.Args)
 		// Soft wrap to viewport width using lipgloss
 		wrapWidth := m.width - 2
@@ -219,6 +268,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if label := m.displayModelName(msg.ModelID); label != "" {
 			m.spinnerBar.SetRightText(label)
 		}
+		// Async-warm model limits for the actual response model so context usage works.
+		modelID := msg.ModelID
+		cmds = append(cmds, func() tea.Msg {
+			warmCtx, cancel := context.WithTimeout(m.ctx, 10*time.Second)
+			defer cancel()
+			_ = m.agent.WarmModelUsageLimits(warmCtx, modelID)
+			return ModelWarmDoneMsg{ModelID: modelID}
+		})
+
+	case ReasoningSelectedMsg:
+		m.agent.SetReasoningEffort(msg.Level.Value)
+		if msg.Level.Value == "" {
+			m.AppendRawMessage("  ↳ Reasoning effort: disabled")
+		} else {
+			m.AppendRawMessage(fmt.Sprintf("  ↳ Reasoning effort: %s", msg.Level.Label))
+		}
+		m.recalculateLayout()
 
 	case ModelSelectedMsg:
 		m.agent.SetModel(msg.Model.ID)

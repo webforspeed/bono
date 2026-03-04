@@ -162,6 +162,13 @@ func main() {
 	tuiModel.SetProgram(p)
 	startUpdateCheck(ctx, p, version)
 
+	// Warm model limits in background so context usage shows from the first response.
+	go func() {
+		warmCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		_ = agent.WarmModelUsageLimits(warmCtx, model)
+	}()
+
 	// Start file watcher
 	if watcher != nil {
 		go watcher.Start(ctx, func(count int) {
@@ -217,6 +224,14 @@ func main() {
 
 	agent.OnMessage = func(content string) {
 		p.Send(tui.AgentMessageMsg(content))
+	}
+
+	agent.OnContentDelta = func(delta string) {
+		p.Send(tui.AgentContentDeltaMsg(delta))
+	}
+
+	agent.OnReasoningDelta = func(delta string) {
+		p.Send(tui.AgentReasoningDeltaMsg(delta))
 	}
 
 	agent.OnPreTaskStart = func(name string) {

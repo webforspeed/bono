@@ -48,6 +48,12 @@ type AgentContextUsageMsg struct {
 	TotalCost float64
 }
 
+// AgentContentDeltaMsg carries a text content fragment from streaming.
+type AgentContentDeltaMsg string
+
+// AgentReasoningDeltaMsg carries a reasoning text fragment from streaming.
+type AgentReasoningDeltaMsg string
+
 // AgentResponseModelMsg is sent when core reports the concrete model used for a response.
 type AgentResponseModelMsg struct {
 	ModelID string
