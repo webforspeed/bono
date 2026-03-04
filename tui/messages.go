@@ -48,6 +48,11 @@ type AgentContextUsageMsg struct {
 	TotalCost float64
 }
 
+// AgentResponseModelMsg is sent when core reports the concrete model used for a response.
+type AgentResponseModelMsg struct {
+	ModelID string
+}
+
 // ModelWarmDoneMsg is sent after background warm-up of usage limits for a switched model.
 type ModelWarmDoneMsg struct {
 	ModelID string

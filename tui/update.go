@@ -215,6 +215,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinnerBar.SetContextUsage(msg.Pct)
 		m.spinnerBar.SetTotalCost(msg.TotalCost)
 
+	case AgentResponseModelMsg:
+		if label := m.displayModelName(msg.ModelID); label != "" {
+			m.spinnerBar.SetRightText(label)
+		}
+
 	case ModelSelectedMsg:
 		m.agent.SetModel(msg.Model.ID)
 		m.spinnerBar.SetRightText(msg.Model.Name)
@@ -234,6 +239,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 		if msg.Err != nil {
+			if shouldSuppressModelWarmWarning(msg.ModelID, msg.Err) {
+				break
+			}
 			m.AppendRawMessage(fmt.Sprintf("  ↳ Warning: couldn't load usage limits for %s; context %% may be unavailable (%v)", msg.ModelID, msg.Err))
 		}
 
@@ -387,6 +395,13 @@ func isTerminalGarbage(s string) bool {
 		return true
 	}
 	return false
+}
+
+func shouldSuppressModelWarmWarning(modelID string, err error) bool {
+	if err == nil || modelID != "openrouter/free" {
+		return false
+	}
+	return strings.Contains(err.Error(), `no endpoint limits for model "openrouter/free"`)
 }
 
 func pythonCodeFromCommand(command string) (string, bool) {

@@ -228,6 +228,10 @@ func main() {
 		p.Send(tui.AgentContextUsageMsg{Pct: pct, TotalCost: totalCost})
 	}
 
+	agent.OnResponseModel = func(model string) {
+		p.Send(tui.AgentResponseModelMsg{ModelID: model})
+	}
+
 	agent.OnSandboxFallback = func(command string, reason string) bool {
 		approved := make(chan bool, 1)
 		p.Send(tui.AgentSandboxFallbackMsg{

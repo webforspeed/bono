@@ -259,6 +259,19 @@ func (m *Model) handleResize(msg tea.WindowSizeMsg) {
 	// The initial word wrap of 80 chars is sufficient for most cases.
 }
 
+func (m *Model) displayModelName(modelID string) string {
+	modelID = strings.TrimSpace(modelID)
+	if modelID == "" {
+		return ""
+	}
+	for _, info := range m.modelModal.models {
+		if info.ID == modelID {
+			return info.Name
+		}
+	}
+	return modelID
+}
+
 // submitInput handles submitting the current input.
 func (m *Model) submitInput() tea.Cmd {
 	value := strings.TrimSpace(m.input.Value())
