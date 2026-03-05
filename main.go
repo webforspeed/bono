@@ -145,16 +145,12 @@ func main() {
 		tuiModel.SetWatcher(watcher)
 	}
 
-	// Set initial index status on status bar
+	// Set initial index status in sidebar
 	if svc := agent.CodeSearchService(); svc != nil {
 		stats, err := svc.CodeSearchStats()
-		if err != nil || stats.TotalChunks == 0 {
-			tuiModel.SetStatusText("No index found. Run /index to enable semantic code search.")
-		} else {
-			tuiModel.SetStatusText(fmt.Sprintf("Index: %d chunks across %d files. Ready.", stats.TotalChunks, stats.TotalFiles))
+		if err == nil && stats.TotalChunks > 0 {
+			tuiModel.SetIndexStats(stats.TotalFiles)
 		}
-	} else {
-		tuiModel.SetStatusText("Code search unavailable. Check configuration.")
 	}
 
 	// Create Bubble Tea program (use alt screen for full viewport)

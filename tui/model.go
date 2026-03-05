@@ -18,6 +18,7 @@ type Model struct {
 	input          InputBox
 	spinnerBar     SpinnerBar
 	statusBar      StatusBar
+	sidebar        Sidebar
 	slashModal     SlashModal
 	modelModal     ModelModal
 	reasoningModal ReasoningModal
@@ -73,19 +74,21 @@ func NewWithOptions(agent *core.Agent, ctx context.Context, spinnerType SpinnerT
 	cwd, _ := os.Getwd()
 
 	spinnerBar := NewSpinnerBar(spinnerType)
-	spinnerBar.SetIdleText(cwd)
 	statusBar := NewStatusBar()
 
-	// Show current model name from agent
+	// Resolve display name for current model
 	modelName := agent.ModelName()
-	// Use short display name if found in catalog
 	for _, m := range models {
 		if m.ID == modelName {
 			modelName = m.Name
 			break
 		}
 	}
-	spinnerBar.SetRightText(modelName)
+
+	sidebar := NewSidebar()
+	sidebar.SetCwd(cwd)
+	sidebar.SetModelName(modelName)
+	sidebar.SetGitStatus(FetchGitStatus())
 
 	slashCommands := DefaultSlashCommandSpecs()
 
@@ -94,6 +97,7 @@ func NewWithOptions(agent *core.Agent, ctx context.Context, spinnerType SpinnerT
 		input:             NewInputBox(),
 		spinnerBar:        spinnerBar,
 		statusBar:         statusBar,
+		sidebar:           sidebar,
 		slashModal:        NewSlashModal(),
 		modelModal:        NewModelModal(models),
 		reasoningModal:    NewReasoningModal(),
@@ -110,7 +114,7 @@ func NewWithOptions(agent *core.Agent, ctx context.Context, spinnerType SpinnerT
 
 // Init initializes the model.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.input.Focus(), m.spinnerBar.Tick())
+	return tea.Batch(m.input.Focus(), m.spinnerBar.Tick(), scheduleGitStatusTick())
 }
 
 // AppendMessage adds a message to the viewport.
@@ -168,6 +172,13 @@ func (m *Model) recalculateLayout() {
 		return
 	}
 
+	// Two-column width split
+	sidebarW := sidebarWidth
+	if m.width < 80 {
+		sidebarW = 0
+	}
+	mainW := m.width - sidebarW
+
 	// Calculate heights
 	spinnerHeight := 1 // Spinner bar above input
 	inputHeight := 3   // Input box with border
@@ -176,21 +187,25 @@ func (m *Model) recalculateLayout() {
 	modelHeight := m.modelModal.Height()
 	reasoningHeight := m.reasoningModal.Height()
 
-	// Set component widths
-	m.spinnerBar.SetWidth(m.width)
-	m.input.SetWidth(m.width, m.styles.InputBox)
-	m.statusBar.SetWidth(m.width)
-	m.slashModal.SetWidth(m.width)
-	m.modelModal.SetWidth(m.width)
-	m.reasoningModal.SetWidth(m.width)
+	// Set component widths to main column width
+	m.spinnerBar.SetWidth(mainW)
+	m.input.SetWidth(mainW, m.styles.InputBox)
+	m.statusBar.SetWidth(mainW)
+	m.slashModal.SetWidth(mainW)
+	m.modelModal.SetWidth(mainW)
+	m.reasoningModal.SetWidth(mainW)
 
-	// Viewport gets remaining space
-	m.viewport.Width = m.width
+	// Viewport gets remaining height, using main column width
+	m.viewport.Width = mainW
 	height := m.height - spinnerHeight - inputHeight - statusHeight - slashHeight - modelHeight - reasoningHeight
 	if height < 1 {
 		height = 1
 	}
 	m.viewport.Height = height
+
+	// Sidebar gets full height and fixed width
+	m.sidebar.SetWidth(sidebarW)
+	m.sidebar.SetHeight(m.height)
 }
 
 // ClearMessages clears all messages from the viewport.
@@ -204,9 +219,9 @@ func (m *Model) SetStatus(text string) {
 	m.spinnerBar.SetText(text)
 }
 
-// SetStatusText updates index/watch status text in the spinner metadata row.
-func (m *Model) SetStatusText(text string) {
-	m.spinnerBar.SetStatusText(text)
+// SetIndexStats updates the sidebar with index file count.
+func (m *Model) SetIndexStats(files int) {
+	m.sidebar.SetIndexStats(files)
 }
 
 // SetStatusBarText updates the bottom status bar text.
@@ -260,6 +275,14 @@ func (m *Model) SetProgram(p *tea.Program) {
 // IsProcessing returns whether the agent is currently processing.
 func (m Model) IsProcessing() bool {
 	return m.processing
+}
+
+// mainWidth returns the width of the main content column (excluding sidebar).
+func (m Model) mainWidth() int {
+	if m.width < 80 {
+		return m.width
+	}
+	return m.width - sidebarWidth
 }
 
 // SetWatcher sets the file watcher for change notifications.

@@ -183,7 +183,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		prompt := formatTool(msg.Name, msg.Args)
 		// Soft wrap to viewport width using lipgloss
-		wrapWidth := m.width - 2
+		wrapWidth := m.mainWidth() - 2
 		if wrapWidth < 40 {
 			wrapWidth = 40 // minimum width
 		}
@@ -210,7 +210,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Update the last message to show result
 		prompt := formatTool(msg.Name, msg.Args)
 		// Soft wrap to viewport width using lipgloss
-		wrapWidth := m.width - 2
+		wrapWidth := m.mainWidth() - 2
 		if wrapWidth < 40 {
 			wrapWidth = 40
 		}
@@ -227,6 +227,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateViewportContent()
 		}
 
+		// Refresh git status after tool calls (files may have changed)
+		cmds = append(cmds, refreshGitStatus)
+
 	case AgentPreTaskStartMsg:
 		m.AppendRawMessage(fmt.Sprintf("● Running %s agent...", string(msg)))
 
@@ -242,7 +245,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case AgentSandboxFallbackMsg:
 		// Sandbox blocked a command - request approval for unsandboxed execution
-		wrapWidth := m.width - 2
+		wrapWidth := m.mainWidth() - 2
 		if wrapWidth < 40 {
 			wrapWidth = 40
 		}
@@ -261,12 +264,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinnerBar.SetText("Sandbox blocked - approve unsandboxed?")
 
 	case AgentContextUsageMsg:
-		m.spinnerBar.SetContextUsage(msg.Pct)
-		m.spinnerBar.SetTotalCost(msg.TotalCost)
+		m.sidebar.SetContextUsage(msg.Pct)
+		m.sidebar.SetTotalCost(msg.TotalCost)
 
 	case AgentResponseModelMsg:
 		if label := m.displayModelName(msg.ModelID); label != "" {
-			m.spinnerBar.SetRightText(label)
+			m.sidebar.SetModelName(label)
 		}
 		// Async-warm model limits for the actual response model so context usage works.
 		modelID := msg.ModelID
@@ -288,7 +291,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ModelSelectedMsg:
 		m.agent.SetModel(msg.Model.ID)
-		m.spinnerBar.SetRightText(msg.Model.Name)
+		m.sidebar.SetModelName(msg.Model.Name)
 		m.AppendRawMessage(fmt.Sprintf("  ↳ Switched to %s (%s)", msg.Model.Name, msg.Model.ID))
 		m.recalculateLayout()
 		modelID := msg.Model.ID
@@ -325,7 +328,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.AppendRawMessage(fmt.Sprintf("  ↳ Index complete: %d chunks across %d files (%.1fs)",
 				msg.TotalChunks, msg.TotalFiles, msg.Duration))
-			m.SetStatusText(fmt.Sprintf("Index: %d chunks across %d files. Ready.", msg.TotalChunks, msg.TotalFiles))
+			m.sidebar.SetIndexStats(msg.TotalFiles)
 		}
 		// Reset watcher's changed file list since we just indexed
 		if m.watcher != nil {
@@ -334,8 +337,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case WatcherNotifyMsg:
 		if msg.ChangedCount > 0 {
-			m.SetStatusText(fmt.Sprintf("%d files changed since last index. Run /index to update.", msg.ChangedCount))
+			m.sidebar.SetChangedFiles(msg.ChangedCount)
 		}
+		// Refresh git status when files change
+		cmds = append(cmds, refreshGitStatus)
+
+	case GitStatusMsg:
+		m.sidebar.SetGitStatus(msg.Status)
+		// Schedule next periodic refresh
+		cmds = append(cmds, scheduleGitStatusTick())
+
+	case GitStatusTickMsg:
+		cmds = append(cmds, refreshGitStatus)
 
 	case UpdateBannerMsg:
 		m.SetStatusBarBanner(msg.Text)
@@ -468,6 +481,18 @@ func shouldSuppressModelWarmWarning(modelID string, err error) bool {
 		return false
 	}
 	return strings.Contains(err.Error(), `no endpoint limits for model "openrouter/free"`)
+}
+
+// refreshGitStatus fetches the current git status for the sidebar.
+func refreshGitStatus() tea.Msg {
+	return GitStatusMsg{Status: FetchGitStatus()}
+}
+
+// scheduleGitStatusTick returns a command that fires a GitStatusTickMsg after a delay.
+func scheduleGitStatusTick() tea.Cmd {
+	return tea.Tick(5*time.Second, func(time.Time) tea.Msg {
+		return GitStatusTickMsg{}
+	})
 }
 
 func pythonCodeFromCommand(command string) (string, bool) {

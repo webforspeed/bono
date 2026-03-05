@@ -68,8 +68,8 @@ func handleClear(m *Model, arg string) tea.Cmd {
 	m.ClearMessages()
 	m.agent.Reset()
 	m.agent.ResetCost()
-	m.spinnerBar.SetContextUsage(0)
-	m.spinnerBar.SetTotalCost(0)
+	m.sidebar.SetContextUsage(0)
+	m.sidebar.SetTotalCost(0)
 	m.input.Reset()
 	return nil
 }
