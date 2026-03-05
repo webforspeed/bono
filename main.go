@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	core "github.com/webforspeed/bono-core"
+	"github.com/webforspeed/bono/internal/worktree"
 	"github.com/webforspeed/bono/prompts"
 	"github.com/webforspeed/bono/tui"
 )
@@ -173,11 +175,46 @@ func main() {
 	}
 
 	// Set up agent hooks to send messages to TUI
+	worktreeMgr := worktree.NewManager()
+
 	agent.OnToolCall = func(name string, args map[string]any) bool {
 		if name == "read_file" || name == "compact_context" || name == "code_search" || name == "WebSearch" || name == "WebFetch" {
 			// Auto-approve read-only tools
 			p.Send(tui.AgentToolCallMsg{Name: name, Args: args})
 			return true
+		}
+
+		if name == "write_file" || name == "edit_file" {
+			originalPath, _ := args["path"].(string)
+			session, err := worktreeMgr.EnsureSession(ctx, cwd)
+			if err == nil {
+				relPath, rewrittenAbs, err := worktreeMgr.RewritePathForWorktree(session, originalPath)
+				if err == nil {
+					beforeContent, wasNewFile, readErr := worktree.ReadFileOrEmpty(filepath.Join(session.RepoRoot, filepath.FromSlash(relPath)))
+					if readErr == nil {
+						args["path"] = rewrittenAbs
+						worktreeMgr.RegisterRewrite(worktree.PathRewrite{
+							ToolName:      name,
+							OriginalPath:  originalPath,
+							RelPath:       relPath,
+							RewrittenAbs:  rewrittenAbs,
+							WasNewFile:    wasNewFile,
+							BeforeContent: beforeContent,
+						})
+						p.Send(tui.AgentToolCallMsg{Name: name, Args: args})
+						return true
+					}
+				}
+			}
+			// Fallback to existing approval behavior if worktree orchestration fails.
+			approved := make(chan bool, 1)
+			p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Approved: approved})
+			select {
+			case result := <-approved:
+				return result
+			case <-ctx.Done():
+				return false
+			}
 		}
 
 		if name == "run_shell" || name == "python_runtime" {
@@ -197,7 +234,7 @@ func main() {
 			}
 		}
 
-		// Other tools (write_file, edit_file) require approval
+		// Other tools require approval
 		approved := make(chan bool, 1)
 		p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Approved: approved})
 
@@ -216,6 +253,54 @@ func main() {
 			sandboxed = result.ExecMeta.Sandboxed
 		}
 		p.Send(tui.AgentToolDoneMsg{Name: name, Args: args, Status: result.Status, Sandboxed: sandboxed})
+
+		if !result.Success || (name != "write_file" && name != "edit_file") {
+			return
+		}
+
+		rewrittenAbs, _ := args["path"].(string)
+		meta, ok := worktreeMgr.ConsumeRewrite(name, rewrittenAbs)
+		if !ok {
+			return
+		}
+
+		afterContent, _, err := worktree.ReadFileOrEmpty(meta.RewrittenAbs)
+		if err != nil {
+			p.Send(tui.AgentErrorMsg{Err: fmt.Errorf("read post-write content for diff: %w", err)})
+			return
+		}
+
+		p.Send(tui.AgentDiffPreviewMsg{
+			RelPath:    meta.RelPath,
+			OldContent: meta.BeforeContent,
+			NewContent: afterContent,
+		})
+
+		approved := make(chan bool, 1)
+		p.Send(tui.AgentDiffApprovalMsg{RelPath: meta.RelPath, Approved: approved})
+		select {
+		case ok := <-approved:
+			if ok {
+				session := worktreeMgr.CurrentSession()
+				if session == nil {
+					p.Send(tui.AgentErrorMsg{Err: fmt.Errorf("approve diff: worktree session unavailable")})
+					return
+				}
+				if err := worktree.PromoteRewrite(meta, session.RepoRoot); err != nil {
+					p.Send(tui.AgentErrorMsg{Err: fmt.Errorf("approve diff: failed to promote %s: %w", meta.RelPath, err)})
+					return
+				}
+				p.Send(tui.AgentMessageMsg(fmt.Sprintf("Approved diff for `%s`; promoted to current branch", meta.RelPath)))
+				return
+			}
+			if err := worktree.RevertRewrite(meta); err != nil {
+				p.Send(tui.AgentErrorMsg{Err: fmt.Errorf("reject diff: failed to revert %s: %w", meta.RelPath, err)})
+				return
+			}
+			p.Send(tui.AgentMessageMsg(fmt.Sprintf("Rejected diff for `%s`; reverted in worktree", meta.RelPath)))
+		case <-ctx.Done():
+			return
+		}
 	}
 
 	agent.OnMessage = func(content string) {

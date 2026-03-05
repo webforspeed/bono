@@ -65,6 +65,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		if m.diffActive && msg.Type == tea.KeyTab {
+			m.diffViewer.ToggleMode()
+			return m, nil
+		}
+		if m.diffActive {
+			switch msg.Type {
+			case tea.KeyUp, tea.KeyDown, tea.KeyPgUp, tea.KeyPgDown, tea.KeyHome, tea.KeyEnd:
+				var diffCmd tea.Cmd
+				m.diffViewer, diffCmd = m.diffViewer.Update(msg)
+				if diffCmd != nil {
+					cmds = append(cmds, diffCmd)
+				}
+				return m, nil
+			}
+		}
+
 		switch msg.Type {
 		case tea.KeyEnter:
 			// If pending tool approval, approve it
@@ -79,6 +95,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.pendingSandboxFallback.Approved <- true
 				m.pendingSandboxFallback = nil
 				m.spinnerBar.SetText("Running unsandboxed...")
+				return m, nil
+			}
+			// If pending diff approval, approve it
+			if m.pendingDiffApproval != nil {
+				m.pendingDiffApproval.Approved <- true
+				m.pendingDiffApproval = nil
+				m.diffActive = false
+				m.recalculateLayout()
+				m.spinnerBar.SetText("Thinking...")
 				return m, nil
 			}
 			// If slash modal is active and Enter is pressed, select the command
@@ -103,6 +128,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.pendingSandboxFallback.Approved <- false
 				m.pendingSandboxFallback = nil
 			}
+			if m.pendingDiffApproval != nil {
+				m.pendingDiffApproval.Approved <- false
+				m.pendingDiffApproval = nil
+				m.diffActive = false
+				m.recalculateLayout()
+			}
 			return m, tea.Quit
 
 		case tea.KeyEsc:
@@ -126,6 +157,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Update the message to show cancelled
 				if len(m.messages) > 0 {
 					m.messages[len(m.messages)-1] = strings.TrimSuffix(m.messages[len(m.messages)-1], " [Enter/Esc]") + " => cancelled"
+					m.updateViewportContent()
+				}
+				return m, nil
+			}
+			// If pending diff approval, reject it
+			if m.pendingDiffApproval != nil {
+				m.pendingDiffApproval.Approved <- false
+				m.pendingDiffApproval = nil
+				m.diffActive = false
+				m.recalculateLayout()
+				m.spinnerBar.SetText("Thinking...")
+				if len(m.messages) > 0 {
+					m.messages[len(m.messages)-1] = strings.TrimSuffix(m.messages[len(m.messages)-1], " [Enter/Esc]") + " => rejected"
 					m.updateViewportContent()
 				}
 				return m, nil
@@ -229,6 +273,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Refresh git status after tool calls (files may have changed)
 		cmds = append(cmds, refreshGitStatus)
+
+	case AgentDiffPreviewMsg:
+		m.diffViewer.SetContent(msg.OldContent, msg.NewContent, msg.RelPath+" (before)", msg.RelPath+" (after)")
+		m.diffActive = true
+		m.recalculateLayout()
+
+	case AgentDiffApprovalMsg:
+		wrapWidth := m.mainWidth() - 2
+		if wrapWidth < 40 {
+			wrapWidth = 40
+		}
+		wrapStyle := lipgloss.NewStyle().Width(wrapWidth)
+		displayStr := fmt.Sprintf("  ↳ Approve diff for %s? [Enter/Esc]", msg.RelPath)
+		m.AppendRawMessage(wrapStyle.Render(displayStr))
+		m.pendingDiffApproval = &msg
+		m.spinnerBar.SetText("Waiting for diff approval...")
 
 	case AgentPreTaskStartMsg:
 		m.AppendRawMessage(fmt.Sprintf("● Running %s agent...", string(msg)))
