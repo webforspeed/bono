@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -35,11 +36,12 @@ type Sidebar struct {
 	contextUsagePct float64
 	totalCost       float64
 	cwd             string
-	indexedFiles    int
-	changedFiles    int // files changed since last index
-	indexReady      bool
-	git             GitStatus
-	width, height   int
+	indexedFiles     int
+	changedFiles     int // files changed since last index
+	indexReady       bool
+	reasoningEffort  string // current reasoning effort value (e.g. "high", "" = disabled)
+	git              GitStatus
+	width, height    int
 }
 
 // NewSidebar creates a new Sidebar.
@@ -53,7 +55,8 @@ func (s *Sidebar) SetTotalCost(cost float64)   { s.totalCost = cost }
 func (s *Sidebar) SetCwd(cwd string)           { s.cwd = cwd }
 func (s *Sidebar) SetWidth(w int)              { s.width = w }
 func (s *Sidebar) SetHeight(h int)             { s.height = h }
-func (s *Sidebar) SetGitStatus(g GitStatus)    { s.git = g }
+func (s *Sidebar) SetGitStatus(g GitStatus)        { s.git = g }
+func (s *Sidebar) SetReasoningEffort(effort string) { s.reasoningEffort = effort }
 
 // SetIndexStats updates the workspace index information.
 func (s *Sidebar) SetIndexStats(files int) {
@@ -125,6 +128,19 @@ func (s Sidebar) sections() []SidebarSection {
 		})
 	}
 	sections = append(sections, session)
+
+	// REASONING
+	reasoning := SidebarSection{Header: "REASONING (/reasoning)"}
+	for _, level := range DefaultReasoningLevels() {
+		item := SidebarItem{Text: level.Label}
+		if level.Value == s.reasoningEffort {
+			item.Color = lipgloss.Color("86") // highlighted = selected
+		} else {
+			item.Color = lipgloss.Color("241") // dimmed = not selected
+		}
+		reasoning.Items = append(reasoning.Items, item)
+	}
+	sections = append(sections, reasoning)
 
 	// CONTEXT
 	context := SidebarSection{Header: "CONTEXT (/clear)"}
@@ -208,29 +224,40 @@ func (s Sidebar) View(styles Styles) string {
 		}
 	}
 
-	// CWD pinned near the bottom, aligned with the input text.
-	// The left column has: spinner(1) + input(3) + status(1) = 5 lines at the bottom.
-	// The input text sits on the middle line of the input box, which is 3 lines from the bottom.
+	// CWD and branch pinned near the bottom, aligned with the input text.
 	contentLines := len(lines)
 	if s.cwd != "" {
-		cwd := s.cwd
-		if s.git.Branch != "" {
-			cwd += ":" + s.git.Branch
-		}
 		maxLen := s.width - 6 // account for border, padding, indent
+
+		// CWD line — replace $HOME with ~ so it's copy-pasteable into a terminal
+		cwd := s.cwd
+		if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(cwd, home) {
+			cwd = "~" + cwd[len(home):]
+		}
 		if maxLen > 0 && len(cwd) > maxLen {
 			cwd = "..." + cwd[len(cwd)-maxLen+3:]
 		}
 		cwdStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Bold(true)
 		cwdLine := cwdStyle.Render(cwd)
 
-		// Position CWD 2 lines from the bottom to align with input text
-		// (1 status bar + 1 input bottom border = 2 lines below the input text)
-		padding := s.height - contentLines - 2 - 1 // -2 for bottom offset, -1 for cwd line itself
+		// Branch line
+		var branchLine string
+		bottomLines := 1 // just the cwd line
+		if s.git.Branch != "" {
+			branchStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("78"))
+			branchLine = branchStyle.Render("main <- " + s.git.Branch)
+			bottomLines = 2
+		}
+
+		// Position so bottom aligns with input text (2 lines from terminal bottom)
+		padding := s.height - contentLines - 2 - bottomLines
 		if padding < 1 {
 			padding = 1
 		}
 		lines = append(lines, strings.Repeat("\n", padding)+cwdLine)
+		if branchLine != "" {
+			lines = append(lines, branchLine)
+		}
 	}
 
 	content := strings.Join(lines, "\n")
