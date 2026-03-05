@@ -43,6 +43,22 @@ func DefaultModelCatalog() []ModelInfo {
 			Context:      "400K",
 			Tier:         "frontier",
 		},
+		{
+			ID:           "openai/gpt-5.4-pro",
+			Name:         "GPT-5.4 Pro",
+			Provider:     "OpenAI",
+			Capabilities: []string{"recommended", "frontier", "very high cost"},
+			Context:      "1M",
+			Tier:         "frontier",
+		},
+		{
+			ID:           "openai/gpt-5.4",
+			Name:         "GPT-5.4",
+			Provider:     "OpenAI",
+			Capabilities: []string{"recommended", "balanced", "high cost"},
+			Context:      "1M",
+			Tier:         "balanced",
+		},
 
 		{
 			ID:           "openai/gpt-oss-120b",
