@@ -342,6 +342,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ReasoningSelectedMsg:
 		m.agent.SetReasoningEffort(msg.Level.Value)
+		m.sidebar.SetReasoningEffort(msg.Level.Value)
 		if msg.Level.Value == "" {
 			m.AppendRawMessage("  ↳ Reasoning effort: disabled")
 		} else {

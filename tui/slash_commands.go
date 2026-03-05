@@ -100,9 +100,11 @@ func handleReasoning(m *Model, arg string) tea.Cmd {
 		}
 		if arg == "none" {
 			m.agent.SetReasoningEffort("")
+			m.sidebar.SetReasoningEffort("")
 			m.AppendRawMessage("  Reasoning effort: disabled")
 		} else {
 			m.agent.SetReasoningEffort(arg)
+			m.sidebar.SetReasoningEffort(arg)
 			m.AppendRawMessage(fmt.Sprintf("  Reasoning effort: %s", arg))
 		}
 		m.input.Reset()
