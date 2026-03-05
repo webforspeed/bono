@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	core "github.com/webforspeed/bono-core"
+	"github.com/webforspeed/bono/hooks"
 )
 
 // Model is the main Bubble Tea model that composes all TUI components.
@@ -32,9 +33,10 @@ type Model struct {
 	statusBarBanner   string
 
 	// External dependencies
-	agent    *core.Agent
-	ctx      context.Context
-	renderer *glamour.TermRenderer
+	agent      *core.Agent
+	ctx        context.Context
+	renderer   *glamour.TermRenderer
+	dispatcher *hooks.Dispatcher
 
 	// For async agent calls
 	program *tea.Program
@@ -306,6 +308,11 @@ func (m *Model) SetWatcher(w *FileWatcher) {
 	m.watcher = w
 }
 
+// SetDispatcher sets the hook dispatcher for lifecycle events.
+func (m *Model) SetDispatcher(d *hooks.Dispatcher) {
+	m.dispatcher = d
+}
+
 // AgentResponseMsg is sent when the agent finishes processing.
 type AgentResponseMsg struct {
 	Response string
@@ -355,6 +362,11 @@ func (m *Model) submitInput() tea.Cmd {
 		return m.handleSlashCommand(value)
 	}
 
+	// Fire UserPromptSubmit hook
+	if m.dispatcher != nil {
+		m.dispatcher.Fire(m.ctx, hooks.UserPromptSubmit, hooks.UserPromptSubmitPayload{Input: value})
+	}
+
 	// Clear input and submit to agent
 	m.input.Reset()
 
@@ -369,10 +381,14 @@ func (m *Model) submitInput() tea.Cmd {
 	// Return a command that will call the agent asynchronously
 	agent := m.agent
 	ctx := m.ctx
+	d := m.dispatcher
 	return tea.Batch(
 		m.spinnerBar.Tick(),
 		func() tea.Msg {
 			response, err := agent.Chat(ctx, value)
+			if d != nil {
+				d.Fire(ctx, hooks.Stop, hooks.StopPayload{Response: response, Err: err})
+			}
 			return AgentResponseMsg{Response: response, Err: err}
 		},
 	)

@@ -15,6 +15,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	core "github.com/webforspeed/bono-core"
+	"github.com/webforspeed/bono/hooks"
+	"github.com/webforspeed/bono/internal/logging"
 	"github.com/webforspeed/bono/internal/worktree"
 	"github.com/webforspeed/bono/prompts"
 	"github.com/webforspeed/bono/tui"
@@ -124,6 +126,30 @@ func main() {
 		}
 	}()
 
+	// Set up structured logging and hook dispatcher
+	logger, closeLog, logErr := logging.New("logs/bono.jsonl")
+	if logErr != nil {
+		fmt.Printf("Warning: structured logging unavailable: %v\n", logErr)
+	}
+	if closeLog != nil {
+		defer closeLog()
+	}
+
+	dispatcher := hooks.NewDispatcher()
+	if logger != nil {
+		logHandler := hooks.NewLogHandler(logger)
+		dispatcher.On(hooks.SessionStart, logHandler)
+		dispatcher.On(hooks.SessionEnd, logHandler)
+		dispatcher.On(hooks.UserPromptSubmit, logHandler)
+		dispatcher.On(hooks.PreToolUse, logHandler)
+		dispatcher.On(hooks.PostToolUse, logHandler)
+		dispatcher.On(hooks.PostToolUseFailure, logHandler)
+		dispatcher.On(hooks.PermissionRequest, logHandler)
+		dispatcher.On(hooks.Stop, logHandler)
+		dispatcher.On(hooks.WorktreeCreate, logHandler)
+		dispatcher.On(hooks.WorktreeRemove, logHandler)
+	}
+
 	// Create context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -140,6 +166,7 @@ func main() {
 	// Create TUI model
 	tuiModel := tui.NewWithOptions(agent, ctx, tui.SpinnerDot, models)
 	tuiModel.SetStatusBarText(tui.StatusBarText(version))
+	tuiModel.SetDispatcher(dispatcher)
 
 	var watcher *tui.FileWatcher
 	if w, err := tui.NewFileWatcher(cwd); err == nil {
@@ -177,7 +204,10 @@ func main() {
 	// Set up agent hooks to send messages to TUI
 	worktreeMgr := worktree.NewManager()
 
+	worktreeCreated := false
 	agent.OnToolCall = func(name string, args map[string]any) bool {
+		dispatcher.Fire(ctx, hooks.PreToolUse, hooks.ToolPayload{ToolName: name, Args: args})
+
 		if name == "read_file" || name == "compact_context" || name == "code_search" || name == "WebSearch" || name == "WebFetch" {
 			// Auto-approve read-only tools
 			p.Send(tui.AgentToolCallMsg{Name: name, Args: args})
@@ -188,6 +218,10 @@ func main() {
 			originalPath, _ := args["path"].(string)
 			session, err := worktreeMgr.EnsureSession(ctx, cwd)
 			if err == nil {
+				if !worktreeCreated {
+					worktreeCreated = true
+					dispatcher.Fire(ctx, hooks.WorktreeCreate, hooks.WorktreePayload{Path: session.WorktreeRoot})
+				}
 				relPath, rewrittenAbs, err := worktreeMgr.RewritePathForWorktree(session, originalPath)
 				if err == nil {
 					beforeContent, wasNewFile, readErr := worktree.ReadFileOrEmpty(filepath.Join(session.RepoRoot, filepath.FromSlash(relPath)))
@@ -207,6 +241,7 @@ func main() {
 				}
 			}
 			// Fallback to existing approval behavior if worktree orchestration fails.
+			dispatcher.Fire(ctx, hooks.PermissionRequest, hooks.PermissionPayload{ToolName: name, Args: args})
 			approved := make(chan bool, 1)
 			p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Approved: approved})
 			select {
@@ -224,6 +259,7 @@ func main() {
 				return true
 			}
 			// Non-sandboxed requires approval
+			dispatcher.Fire(ctx, hooks.PermissionRequest, hooks.PermissionPayload{ToolName: name, Args: args})
 			approved := make(chan bool, 1)
 			p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Approved: approved})
 			select {
@@ -235,6 +271,7 @@ func main() {
 		}
 
 		// Other tools require approval
+		dispatcher.Fire(ctx, hooks.PermissionRequest, hooks.PermissionPayload{ToolName: name, Args: args})
 		approved := make(chan bool, 1)
 		p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Approved: approved})
 
@@ -248,6 +285,13 @@ func main() {
 	}
 
 	agent.OnToolDone = func(name string, args map[string]any, result core.ToolResult) {
+		payload := hooks.ToolResultPayload{ToolName: name, Args: args, Status: result.Status, Success: result.Success}
+		if result.Success {
+			dispatcher.Fire(ctx, hooks.PostToolUse, payload)
+		} else {
+			dispatcher.Fire(ctx, hooks.PostToolUseFailure, payload)
+		}
+
 		sandboxed := false
 		if result.ExecMeta != nil {
 			sandboxed = result.ExecMeta.Sandboxed
@@ -348,11 +392,17 @@ func main() {
 		}
 	}
 
+	// Fire SessionStart before running TUI
+	dispatcher.Fire(ctx, hooks.SessionStart, hooks.SessionStartPayload{})
+
 	// Run the TUI
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running TUI: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Fire SessionEnd after TUI exits
+	dispatcher.Fire(ctx, hooks.SessionEnd, hooks.SessionEndPayload{})
 }
 
 func envOr(key, fallback string) string {
