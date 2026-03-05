@@ -47,6 +47,11 @@ type Model struct {
 	// Tool approval state
 	pendingApproval        *AgentToolCallMsg        // current tool awaiting Enter/Esc
 	pendingSandboxFallback *AgentSandboxFallbackMsg // sandbox fallback awaiting Enter/Esc
+	pendingDiffApproval    *AgentDiffApprovalMsg    // diff approval awaiting Enter/Esc
+
+	// Diff viewer state
+	diffViewer DiffViewer
+	diffActive bool
 
 	// Code search watcher metadata
 	watcher *FileWatcher
@@ -54,7 +59,7 @@ type Model struct {
 	// Streaming state
 	streamingContent   string // accumulates content deltas
 	streamingReasoning string // accumulates reasoning deltas
-	isStreaming         bool  // true while streaming response in progress
+	isStreaming        bool   // true while streaming response in progress
 }
 
 // New creates a new TUI Model with the given agent and context.
@@ -101,6 +106,7 @@ func NewWithOptions(agent *core.Agent, ctx context.Context, spinnerType SpinnerT
 		slashModal:        NewSlashModal(),
 		modelModal:        NewModelModal(models),
 		reasoningModal:    NewReasoningModal(),
+		diffViewer:        NewDiffViewer(),
 		styles:            DefaultStyles(),
 		slashCommands:     slashCommands,
 		slashCommandIndex: slashCommandIndex(slashCommands),
@@ -186,6 +192,13 @@ func (m *Model) recalculateLayout() {
 	slashHeight := m.slashModal.Height()
 	modelHeight := m.modelModal.Height()
 	reasoningHeight := m.reasoningModal.Height()
+	diffHeight := 0
+	if m.diffActive {
+		diffHeight = 16
+		if m.height < 30 {
+			diffHeight = 10
+		}
+	}
 
 	// Set component widths to main column width
 	m.spinnerBar.SetWidth(mainW)
@@ -194,10 +207,13 @@ func (m *Model) recalculateLayout() {
 	m.slashModal.SetWidth(mainW)
 	m.modelModal.SetWidth(mainW)
 	m.reasoningModal.SetWidth(mainW)
+	if m.diffActive {
+		m.diffViewer.SetSize(mainW, diffHeight)
+	}
 
 	// Viewport gets remaining height, using main column width
 	m.viewport.Width = mainW
-	height := m.height - spinnerHeight - inputHeight - statusHeight - slashHeight - modelHeight - reasoningHeight
+	height := m.height - spinnerHeight - inputHeight - statusHeight - slashHeight - modelHeight - reasoningHeight - diffHeight
 	if height < 1 {
 		height = 1
 	}

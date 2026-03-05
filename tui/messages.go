@@ -19,6 +19,19 @@ type AgentToolDoneMsg struct {
 	Sandboxed bool // true if ran in sandbox (shell/python)
 }
 
+// AgentDiffPreviewMsg carries file-scoped before/after content for post-write review.
+type AgentDiffPreviewMsg struct {
+	RelPath    string
+	OldContent string
+	NewContent string
+}
+
+// AgentDiffApprovalMsg asks user to approve/reject a diff preview.
+type AgentDiffApprovalMsg struct {
+	RelPath  string
+	Approved chan bool // TUI sends approval here (Enter=true, Esc=false)
+}
+
 // AgentPreTaskStartMsg is sent when a pre-task agent starts.
 type AgentPreTaskStartMsg string
 
