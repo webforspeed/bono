@@ -23,6 +23,11 @@ type Styles struct {
 	SlashItemSelected lipgloss.Style
 	SlashCommand      lipgloss.Style
 	SlashDescription  lipgloss.Style
+
+	// Sidebar
+	Sidebar       lipgloss.Style
+	SidebarHeader lipgloss.Style
+	SidebarItem   lipgloss.Style
 }
 
 // DefaultStyles returns the default style configuration.
@@ -66,5 +71,21 @@ func DefaultStyles() Styles {
 
 		SlashDescription: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("241")),
+
+		Sidebar: lipgloss.NewStyle().
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderLeft(true).
+			BorderTop(false).
+			BorderBottom(false).
+			BorderRight(false).
+			BorderForeground(lipgloss.Color("240")).
+			Padding(0, 1),
+
+		SidebarHeader: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241")).
+			Bold(true),
+
+		SidebarItem: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("244")),
 	}
 }

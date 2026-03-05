@@ -14,44 +14,49 @@ func (m Model) View() string {
 	inputView := m.input.View(m.styles)
 	statusView := m.statusBar.View(m.styles)
 
-	// Conditionally include modals above the spinner bar
+	// Build left column (vertical stack)
+	var leftColumn string
 	if m.modelModal.IsActive() {
 		modalView := m.modelModal.View(m.styles)
-		return lipgloss.JoinVertical(lipgloss.Left,
+		leftColumn = lipgloss.JoinVertical(lipgloss.Left,
 			viewportView,
 			modalView,
 			spinnerView,
 			inputView,
 			statusView,
 		)
-	}
-
-	if m.reasoningModal.IsActive() {
+	} else if m.reasoningModal.IsActive() {
 		modalView := m.reasoningModal.View(m.styles)
-		return lipgloss.JoinVertical(lipgloss.Left,
+		leftColumn = lipgloss.JoinVertical(lipgloss.Left,
 			viewportView,
 			modalView,
 			spinnerView,
 			inputView,
 			statusView,
 		)
-	}
-
-	if m.slashModal.IsActive() {
+	} else if m.slashModal.IsActive() {
 		slashView := m.slashModal.View(m.styles)
-		return lipgloss.JoinVertical(lipgloss.Left,
+		leftColumn = lipgloss.JoinVertical(lipgloss.Left,
 			viewportView,
 			slashView,
 			spinnerView,
 			inputView,
 			statusView,
 		)
+	} else {
+		leftColumn = lipgloss.JoinVertical(lipgloss.Left,
+			viewportView,
+			spinnerView,
+			inputView,
+			statusView,
+		)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left,
-		viewportView,
-		spinnerView,
-		inputView,
-		statusView,
-	)
+	// Sidebar (right column, spans full height)
+	sidebarView := m.sidebar.View(m.styles)
+	if sidebarView == "" {
+		return leftColumn
+	}
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, sidebarView)
 }

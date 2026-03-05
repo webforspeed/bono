@@ -86,16 +86,11 @@ func (t SpinnerType) toSpinnerModel() spinner.Spinner {
 
 // SpinnerBar displays a spinner with status text above the input box.
 type SpinnerBar struct {
-	spinner         spinner.Model
-	text            string // text shown when spinner is active (e.g., "Thinking...")
-	idleText        string // text shown when spinner is inactive (e.g., working directory)
-	statusText      string // index/file-change status shown on the right metadata row
-	rightText       string // text shown on right side (e.g., model name)
-	width           int
-	active          bool
-	spinnerType     SpinnerType
-	contextUsagePct float64 // 0 means not yet known
-	totalCost       float64 // cumulative session cost in dollars
+	spinner     spinner.Model
+	text        string // text shown when spinner is active (e.g., "Thinking...")
+	width       int
+	active      bool
+	spinnerType SpinnerType
 }
 
 // NewSpinnerBar creates a new SpinnerBar with the specified spinner type.
@@ -107,7 +102,6 @@ func NewSpinnerBar(spinnerType SpinnerType) SpinnerBar {
 	return SpinnerBar{
 		spinner:     s,
 		text:        "Thinking...",
-		idleText:    "",
 		active:      false,
 		spinnerType: spinnerType,
 	}
@@ -116,21 +110,6 @@ func NewSpinnerBar(spinnerType SpinnerType) SpinnerBar {
 // SetText updates the status text shown when spinner is active.
 func (s *SpinnerBar) SetText(text string) {
 	s.text = text
-}
-
-// SetIdleText updates the text shown when spinner is inactive (e.g., working directory).
-func (s *SpinnerBar) SetIdleText(text string) {
-	s.idleText = text
-}
-
-// SetStatusText updates index/watch status shown in the right metadata row.
-func (s *SpinnerBar) SetStatusText(text string) {
-	s.statusText = text
-}
-
-// SetRightText sets the right-aligned text (e.g., model name).
-func (s *SpinnerBar) SetRightText(text string) {
-	s.rightText = text
 }
 
 // SetWidth sets the width of the spinner bar.
@@ -165,16 +144,6 @@ func (s *SpinnerBar) NextSpinnerType() {
 	s.SetSpinnerType(SpinnerType(next))
 }
 
-// SetContextUsage updates the context usage percentage.
-func (s *SpinnerBar) SetContextUsage(pct float64) {
-	s.contextUsagePct = pct
-}
-
-// SetTotalCost updates the cumulative session cost.
-func (s *SpinnerBar) SetTotalCost(cost float64) {
-	s.totalCost = cost
-}
-
 // Text returns the current status text.
 func (s SpinnerBar) Text() string {
 	return s.text
@@ -197,88 +166,16 @@ func (s SpinnerBar) Tick() tea.Cmd {
 
 // View renders the spinner bar.
 func (s SpinnerBar) View(styles Styles) string {
-	var left string
-	if s.active {
-		left = s.spinner.View() + " " + s.text
-	}
-
-	// Build right-side segments: context used • cost • CWD • status • model
-	var rightParts []string
-	if s.contextUsagePct > 0 {
-		rightParts = append(rightParts, fmt.Sprintf("%.0f%% context used", s.contextUsagePct))
-	}
-	if s.totalCost > 0 {
-		rightParts = append(rightParts, formatCost(s.totalCost))
-	}
-	if s.idleText != "" {
-		rightParts = append(rightParts, s.idleText)
-	}
-	if s.statusText != "" {
-		rightParts = append(rightParts, s.statusText)
-	}
-
 	style := styles.SpinnerBar
 	if s.width > 0 {
 		style = style.Width(s.width)
 	}
 
-	// Model name on far right
-	modelPart := ""
-	if s.rightText != "" {
-		modelPart = lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render(s.rightText)
+	if !s.active {
+		return style.Render("")
 	}
 
-	if len(rightParts) == 0 && modelPart == "" {
-		if !s.active {
-			return style.Render(s.idleText)
-		}
-		return style.Render(left)
-	}
-
-	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	right := s.renderRightParts(rightParts, dimStyle)
-
-	// Append model name after context usage
-	if modelPart != "" {
-		if right != "" {
-			right += dimStyle.Render(" • ") + modelPart
-		} else {
-			right = modelPart
-		}
-	}
-
-	// Available width inside padding
-	pad := style.GetHorizontalPadding()
-	avail := s.width - pad
-	leftWidth := lipgloss.Width(left)
-	rightWidth := lipgloss.Width(right)
-	gap := avail - leftWidth - rightWidth
-	if gap < 1 {
-		return style.Render(left)
-	}
-
-	row := left + lipgloss.NewStyle().Width(gap).Render("") + right
-	return style.Render(row)
-}
-
-func (s SpinnerBar) renderRightParts(parts []string, dimStyle lipgloss.Style) string {
-	if len(parts) == 0 {
-		return ""
-	}
-	// First part gets context usage coloring if we have context data
-	sep := dimStyle.Render(" • ")
-	var result string
-	for i, part := range parts {
-		if i > 0 {
-			result += sep
-		}
-		if s.contextUsagePct > 0 && i == 0 {
-			result += lipgloss.NewStyle().Foreground(contextUsageColor(s.contextUsagePct)).Render(part)
-		} else {
-			result += dimStyle.Render(part)
-		}
-	}
-	return result
+	return style.Render(s.spinner.View() + " " + s.text)
 }
 
 // formatCost formats a dollar cost for display, adapting precision to magnitude.
@@ -301,6 +198,6 @@ func contextUsageColor(pct float64) lipgloss.Color {
 	case pct >= 60:
 		return lipgloss.Color("214") // orange
 	default:
-		return lipgloss.Color("244") // dim gray (matches spinner bar)
+		return lipgloss.Color("244") // dim gray
 	}
 }

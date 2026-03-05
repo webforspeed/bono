@@ -94,3 +94,11 @@ type WatcherNotifyMsg struct {
 type UpdateBannerMsg struct {
 	Text string
 }
+
+// GitStatusMsg carries a refreshed git status for the sidebar.
+type GitStatusMsg struct {
+	Status GitStatus
+}
+
+// GitStatusTickMsg triggers the next periodic git status refresh.
+type GitStatusTickMsg struct{}
