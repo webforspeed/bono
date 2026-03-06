@@ -2,11 +2,14 @@ package tui
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+var log = slog.Default()
 
 // ModelInfo describes a model from the catalog.
 type ModelInfo struct {
@@ -45,12 +48,14 @@ func (mm ModelModal) IsActive() bool {
 
 // Show activates the modal.
 func (mm *ModelModal) Show() {
+	log.Info("ModelModal activated")
 	mm.active = true
 	mm.selected = 0
 }
 
 // Hide deactivates the modal.
 func (mm *ModelModal) Hide() {
+	log.Info("ModelModal deactivated")
 	mm.active = false
 }
 
