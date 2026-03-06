@@ -198,7 +198,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Preserve reasoning as a separate styled message above the response.
 			if m.streamingReasoning != "" {
-				m.messages = append(m.messages, m.styles.Reasoning.Render("Thinking: "+m.streamingReasoning))
+				m.messages = append(m.messages, m.renderReasoning("Thinking: "+m.streamingReasoning))
 			}
 			m.streamingContent = ""
 			m.streamingReasoning = ""
@@ -214,7 +214,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Preserve reasoning as a separate styled message.
 			if m.streamingReasoning != "" {
-				m.messages = append(m.messages, m.styles.Reasoning.Render("Thinking: "+m.streamingReasoning))
+				m.messages = append(m.messages, m.renderReasoning("Thinking: "+m.streamingReasoning))
 			}
 			if content := m.streamingContent; content != "" {
 				m.AppendMessage(content)

@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/lipgloss"
 	core "github.com/webforspeed/bono-core"
 	"github.com/webforspeed/bono/hooks"
 )
@@ -152,6 +153,26 @@ func (m *Model) updateViewportContent() {
 	m.viewport.GotoBottom()
 }
 
+// renderReasoning wraps and styles reasoning text to fit the viewport.
+func (m *Model) renderReasoning(text string) string {
+	w := m.viewport.Width - 4 // account for border + padding
+	if w < 20 {
+		w = 20
+	}
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color("244")).
+		Italic(true).
+		BorderStyle(lipgloss.ThickBorder()).
+		BorderLeft(true).
+		BorderTop(false).
+		BorderBottom(false).
+		BorderRight(false).
+		BorderForeground(lipgloss.Color("238")).
+		PaddingLeft(1).
+		Width(w).
+		Render(text)
+}
+
 // updateStreamingView updates the viewport with the current streaming content.
 // Shows raw text during streaming (no markdown) for speed.
 func (m *Model) updateStreamingView() {
@@ -160,8 +181,7 @@ func (m *Model) updateStreamingView() {
 	// Show reasoning dimmed above content if present.
 	var display string
 	if reasoning := m.streamingReasoning; reasoning != "" {
-		dimStyle := m.styles.Reasoning
-		display = dimStyle.Render("Thinking: "+reasoning) + "\n\n"
+		display = m.renderReasoning("Thinking: "+reasoning) + "\n\n"
 	}
 	display += content
 

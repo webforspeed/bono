@@ -183,7 +183,7 @@ func main() {
 	}
 
 	// Create Bubble Tea program (use alt screen for full viewport)
-	p := tea.NewProgram(&tuiModel, tea.WithAltScreen())
+	p := tea.NewProgram(&tuiModel, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	tuiModel.SetProgram(p)
 	startUpdateCheck(ctx, p, version)
 
