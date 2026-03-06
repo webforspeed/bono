@@ -52,8 +52,9 @@ type Model struct {
 	pendingDiffApproval    *AgentDiffApprovalMsg    // diff approval awaiting Enter/Esc
 
 	// Diff viewer state
-	diffViewer DiffViewer
-	diffActive bool
+	diffViewer       DiffViewer
+	diffActive       bool // true when diff is pending approval (for Tab key handling)
+	diffMessageIndex int  // index in m.messages where the inline diff is rendered
 
 	// Code search watcher metadata
 	watcher *FileWatcher
@@ -194,13 +195,6 @@ func (m *Model) recalculateLayout() {
 	slashHeight := m.slashModal.Height()
 	modelHeight := m.modelModal.Height()
 	reasoningHeight := m.reasoningModal.Height()
-	diffHeight := 0
-	if m.diffActive {
-		diffHeight = 16
-		if m.height < 30 {
-			diffHeight = 10
-		}
-	}
 
 	// Set component widths to main column width
 	m.spinnerBar.SetWidth(mainW)
@@ -209,13 +203,10 @@ func (m *Model) recalculateLayout() {
 	m.slashModal.SetWidth(mainW)
 	m.modelModal.SetWidth(mainW)
 	m.reasoningModal.SetWidth(mainW)
-	if m.diffActive {
-		m.diffViewer.SetSize(mainW, diffHeight)
-	}
 
 	// Viewport gets remaining height, using main column width
 	m.viewport.Width = mainW
-	height := m.height - spinnerHeight - inputHeight - statusHeight - slashHeight - modelHeight - reasoningHeight - diffHeight
+	height := m.height - spinnerHeight - inputHeight - statusHeight - slashHeight - modelHeight - reasoningHeight
 	if height < 1 {
 		height = 1
 	}

@@ -67,18 +67,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.diffActive && msg.Type == tea.KeyTab {
 			m.diffViewer.ToggleMode()
-			return m, nil
-		}
-		if m.diffActive {
-			switch msg.Type {
-			case tea.KeyUp, tea.KeyDown, tea.KeyPgUp, tea.KeyPgDown, tea.KeyHome, tea.KeyEnd:
-				var diffCmd tea.Cmd
-				m.diffViewer, diffCmd = m.diffViewer.Update(msg)
-				if diffCmd != nil {
-					cmds = append(cmds, diffCmd)
-				}
-				return m, nil
+			// Re-render the inline diff message
+			if m.diffMessageIndex >= 0 && m.diffMessageIndex < len(m.messages) {
+				m.messages[m.diffMessageIndex] = m.diffViewer.RenderFull()
+				m.updateViewportContent()
 			}
+			return m, nil
 		}
 
 		switch msg.Type {
@@ -107,7 +101,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				msg.Approved <- true
 				m.pendingDiffApproval = nil
 				m.diffActive = false
-				m.recalculateLayout()
 				m.spinnerBar.SetText("Thinking...")
 				return m, nil
 			}
@@ -137,7 +130,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.pendingDiffApproval.Approved <- false
 				m.pendingDiffApproval = nil
 				m.diffActive = false
-				m.recalculateLayout()
 			}
 			return m, tea.Quit
 
@@ -176,7 +168,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				msg.Approved <- false
 				m.pendingDiffApproval = nil
 				m.diffActive = false
-				m.recalculateLayout()
 				m.spinnerBar.SetText("Thinking...")
 				return m, nil
 			}
@@ -282,8 +273,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case AgentDiffPreviewMsg:
 		m.diffViewer.SetContent(msg.OldContent, msg.NewContent, msg.RelPath+" (before)", msg.RelPath+" (after)")
-		m.diffActive = true
-		m.recalculateLayout()
+		// Render the diff inline in the viewport
+		m.diffMessageIndex = len(m.messages)
+		m.AppendRawMessage(m.diffViewer.RenderFull())
 
 	case AgentDiffApprovalMsg:
 		wrapWidth := m.mainWidth() - 2
@@ -299,6 +291,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.AppendRawMessage(wrapStyle.Render(displayStr))
 		m.pendingDiffApproval = &msg
+		m.diffActive = true
 		m.spinnerBar.SetText("Waiting for diff approval...")
 
 	case AgentPreTaskStartMsg:
