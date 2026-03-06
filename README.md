@@ -83,3 +83,12 @@ go run .
 - Bono checks GitHub releases in the background and shows `new version available` in the footer for newer tags.
 - Set `BONO_DISABLE_UPDATE_CHECK=1` to skip update checks.
 - Bono repo owns TUI and UX behavior; `bono-core` owns agent loop, tools, and web/tool internals.
+
+## Vision and Philosophy
+Bono is built around a simple thesis: the best coding agents do not need heavy scaffolding, sprawling configuration, or vendor lock-in. Models are already highly capable and getting better quickly, so the harness should stay small, portable, and opinionated only where it meaningfully improves the experience.
+
+- **Minimal system prompt:** Bono keeps the system prompt intentionally small so the model can do more of the reasoning. Less scaffolding also makes behavior more portable across models. The current system prompt is only around [100 tokens](./prompts/versions/v1.0.5.tmpl).
+- **Single-binary experience:** The logic and scaffolding needed to operate Bono should ship in one binary. You should not need to configure the agent to search for skills in special directories, depend on tools that may or may not be installed, or edit obscure config files just to get productive.
+- **Minimal tool surface:** More tools are not always better. Every tool adds context and decision overhead, so Bono prefers a small set of tools that models actually use well instead of bloating the context window with rarely used capabilities.
+- **Multi-host future:** Bono is not just a CLI idea. The goal is for the same agent experience to be available across multiple surfaces, including the terminal, desktop apps, extensions, mobile apps, and the web.
+- **Model and vendor freedom:** Bono should work with any capable model, including locally hosted models, and should never be restricted to a single vendor.
