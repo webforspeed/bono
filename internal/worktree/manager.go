@@ -37,7 +37,8 @@ type Manager struct {
 	sessions          map[string]*Session // keyed by repo root
 	rewrites          map[string][]PathRewrite
 	completedRewrites []PathRewrite   // accumulated for batch approval after loop
-	completedSet      map[string]bool // dedup by RelPath
+	completedSet      map[string]bool // dedup by RepoRoot|RelPath
+	syncedFiles       map[string]bool // tracks files synced from working tree to worktree (keyed by repoRoot|relPath)
 }
 
 func NewManager() *Manager {
@@ -45,6 +46,7 @@ func NewManager() *Manager {
 		sessions:     make(map[string]*Session),
 		rewrites:     make(map[string][]PathRewrite),
 		completedSet: make(map[string]bool),
+		syncedFiles:  make(map[string]bool),
 	}
 }
 
@@ -141,6 +143,36 @@ func (m *Manager) RegisterRewrite(meta PathRewrite) {
 	m.rewrites[k] = append(m.rewrites[k], meta)
 }
 
+// SyncToWorktree copies the working tree version of a file into the worktree
+// on first access. git worktree checks out at HEAD, so uncommitted changes
+// would be missing — causing edit_file to fail with "string not found".
+// Returns true if a sync was performed, false if already synced or new file.
+func (m *Manager) SyncToWorktree(session *Session, relPath string, wasNewFile bool) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	key := session.RepoRoot + "|" + relPath
+	if m.syncedFiles[key] {
+		return false // already synced or written
+	}
+	m.syncedFiles[key] = true
+
+	if wasNewFile {
+		return false // nothing to sync for new files
+	}
+
+	src := filepath.Join(session.RepoRoot, filepath.FromSlash(relPath))
+	dst := filepath.Join(session.WorktreeRoot, filepath.FromSlash(relPath))
+
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return false
+	}
+	os.MkdirAll(filepath.Dir(dst), 0o755)
+	os.WriteFile(dst, data, 0o644)
+	return true
+}
+
 // Sessions returns all active worktree sessions (for cleanup, hooks, etc.).
 func (m *Manager) Sessions() []*Session {
 	m.mu.Lock()
@@ -197,6 +229,7 @@ func (m *Manager) RemoveAllSessions(ctx context.Context) {
 	m.rewrites = make(map[string][]PathRewrite)
 	m.completedRewrites = nil
 	m.completedSet = make(map[string]bool)
+	m.syncedFiles = make(map[string]bool)
 	m.mu.Unlock()
 
 	for _, s := range sessions {

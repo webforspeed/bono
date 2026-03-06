@@ -233,6 +233,10 @@ func main() {
 				if err == nil {
 					beforeContent, wasNewFile, readErr := worktree.ReadFileOrEmpty(filepath.Join(session.RepoRoot, filepath.FromSlash(relPath)))
 					if readErr == nil {
+						// Sync working tree content to worktree on first access.
+						// git worktree checks out at HEAD; uncommitted changes would be
+						// missing, causing edit_file to fail with "string not found".
+						worktreeMgr.SyncToWorktree(session, relPath, wasNewFile)
 						args["path"] = rewrittenAbs
 						worktreeMgr.RegisterRewrite(worktree.PathRewrite{
 							ToolName:      name,
