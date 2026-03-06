@@ -28,16 +28,22 @@ type PathRewrite struct {
 	RewrittenAbs  string
 	WasNewFile    bool
 	BeforeContent string
+	AfterContent  string // post-write content captured in OnToolDone
 }
 
 type Manager struct {
-	mu       sync.Mutex
-	session  *Session
-	rewrites map[string][]PathRewrite
+	mu                sync.Mutex
+	session           *Session
+	rewrites          map[string][]PathRewrite
+	completedRewrites []PathRewrite   // accumulated for batch approval after loop
+	completedSet      map[string]bool // dedup by RelPath
 }
 
 func NewManager() *Manager {
-	return &Manager{rewrites: make(map[string][]PathRewrite)}
+	return &Manager{
+		rewrites:     make(map[string][]PathRewrite),
+		completedSet: make(map[string]bool),
+	}
 }
 
 func (m *Manager) EnsureSession(ctx context.Context, cwd string) (*Session, error) {
@@ -122,6 +128,35 @@ func (m *Manager) ConsumeRewrite(toolName, rewrittenAbs string) (PathRewrite, bo
 		m.rewrites[k] = q[1:]
 	}
 	return item, true
+}
+
+// RecordCompleted stores a completed rewrite for batch approval after the loop.
+// Deduped by RelPath: first BeforeContent wins, latest AfterContent overwrites.
+func (m *Manager) RecordCompleted(meta PathRewrite) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.completedSet[meta.RelPath] {
+		// Update AfterContent for existing entry (same file edited again).
+		for i := range m.completedRewrites {
+			if m.completedRewrites[i].RelPath == meta.RelPath {
+				m.completedRewrites[i].AfterContent = meta.AfterContent
+				return
+			}
+		}
+		return
+	}
+	m.completedSet[meta.RelPath] = true
+	m.completedRewrites = append(m.completedRewrites, meta)
+}
+
+// DrainCompleted returns and clears all accumulated completed rewrites.
+func (m *Manager) DrainCompleted() []PathRewrite {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := m.completedRewrites
+	m.completedRewrites = nil
+	m.completedSet = make(map[string]bool)
+	return result
 }
 
 func ReadFileOrEmpty(path string) (content string, wasNew bool, err error) {

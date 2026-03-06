@@ -204,6 +204,9 @@ func main() {
 	// Set up agent hooks to send messages to TUI
 	worktreeMgr := worktree.NewManager()
 
+	// Register batch diff approval on Stop hook (fires after agent.Chat returns).
+	dispatcher.On(hooks.Stop, newDiffApprovalHandler(worktreeMgr, p))
+
 	worktreeCreated := false
 	agent.OnToolCall = func(name string, args map[string]any) bool {
 		dispatcher.Fire(ctx, hooks.PreToolUse, hooks.ToolPayload{ToolName: name, Args: args})
@@ -314,37 +317,9 @@ func main() {
 			return
 		}
 
-		p.Send(tui.AgentDiffPreviewMsg{
-			RelPath:    meta.RelPath,
-			OldContent: meta.BeforeContent,
-			NewContent: afterContent,
-		})
-
-		approved := make(chan bool, 1)
-		p.Send(tui.AgentDiffApprovalMsg{RelPath: meta.RelPath, Approved: approved})
-		select {
-		case ok := <-approved:
-			if ok {
-				session := worktreeMgr.CurrentSession()
-				if session == nil {
-					p.Send(tui.AgentErrorMsg{Err: fmt.Errorf("approve diff: worktree session unavailable")})
-					return
-				}
-				if err := worktree.PromoteRewrite(meta, session.RepoRoot); err != nil {
-					p.Send(tui.AgentErrorMsg{Err: fmt.Errorf("approve diff: failed to promote %s: %w", meta.RelPath, err)})
-					return
-				}
-				p.Send(tui.AgentMessageMsg(fmt.Sprintf("Approved diff for `%s`; promoted to current branch", meta.RelPath)))
-				return
-			}
-			if err := worktree.RevertRewrite(meta); err != nil {
-				p.Send(tui.AgentErrorMsg{Err: fmt.Errorf("reject diff: failed to revert %s: %w", meta.RelPath, err)})
-				return
-			}
-			p.Send(tui.AgentMessageMsg(fmt.Sprintf("Rejected diff for `%s`; reverted in worktree", meta.RelPath)))
-		case <-ctx.Done():
-			return
-		}
+		// Record for batch approval after the loop completes (Stop hook).
+		meta.AfterContent = afterContent
+		worktreeMgr.RecordCompleted(meta)
 	}
 
 	agent.OnMessage = func(content string) {
@@ -403,6 +378,42 @@ func main() {
 
 	// Fire SessionEnd after TUI exits
 	dispatcher.Fire(ctx, hooks.SessionEnd, hooks.SessionEndPayload{})
+}
+
+// newDiffApprovalHandler returns a Stop hook handler that shows accumulated
+// write/edit diffs for batch approval after the agentic loop completes.
+func newDiffApprovalHandler(mgr *worktree.Manager, p *tea.Program) hooks.Handler {
+	return hooks.HandlerFunc(func(ctx context.Context, _ hooks.Event, _ any) {
+		completed := mgr.DrainCompleted()
+		session := mgr.CurrentSession()
+		if len(completed) == 0 || session == nil {
+			return
+		}
+		for i, cr := range completed {
+			p.Send(tui.AgentDiffPreviewMsg{
+				RelPath:    cr.RelPath,
+				OldContent: cr.BeforeContent,
+				NewContent: cr.AfterContent,
+			})
+			approved := make(chan bool, 1)
+			p.Send(tui.AgentDiffApprovalMsg{
+				RelPath:  cr.RelPath,
+				Index:    i + 1,
+				Total:    len(completed),
+				Approved: approved,
+			})
+			select {
+			case ok := <-approved:
+				if ok {
+					if err := worktree.PromoteRewrite(cr, session.RepoRoot); err != nil {
+						p.Send(tui.AgentErrorMsg{Err: fmt.Errorf("promote %s: %w", cr.RelPath, err)})
+					}
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	})
 }
 
 func envOr(key, fallback string) string {

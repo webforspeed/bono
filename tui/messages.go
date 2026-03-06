@@ -29,7 +29,9 @@ type AgentDiffPreviewMsg struct {
 // AgentDiffApprovalMsg asks user to approve/reject a diff preview.
 type AgentDiffApprovalMsg struct {
 	RelPath  string
-	Approved chan bool // TUI sends approval here (Enter=true, Esc=false)
+	Index    int       // 1-based position in batch (0 = not part of batch)
+	Total    int       // total diffs in batch (0 = not part of batch)
+	Approved chan bool  // TUI sends approval here (Enter=true, Esc=false)
 }
 
 // AgentPreTaskStartMsg is sent when a pre-task agent starts.

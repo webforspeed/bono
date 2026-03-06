@@ -101,6 +101,22 @@ func (d DiffViewer) View() string {
 	return header + "\n" + d.viewport.View() + "\n" + footer
 }
 
+// RenderFull returns the full diff as styled text for inline viewport display.
+// Unlike View(), this renders ALL lines (no internal scroll viewport).
+func (d DiffViewer) RenderFull() string {
+	header := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39")).Render(
+		fmt.Sprintf("📄 %s → %s", d.oldFilename, d.newFilename),
+	)
+	mode := "inline"
+	if d.viewMode == DiffViewSideBySide {
+		mode = "side-by-side"
+	}
+	hint := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render(
+		fmt.Sprintf("tab: toggle view (%s)", mode),
+	)
+	return header + "\n" + d.renderDiff() + hint
+}
+
 func computeDiffLines(oldContent, newContent string) []diffLine {
 	oldLines := splitLines(oldContent)
 	newLines := splitLines(newContent)

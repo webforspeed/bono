@@ -67,18 +67,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.diffActive && msg.Type == tea.KeyTab {
 			m.diffViewer.ToggleMode()
-			return m, nil
-		}
-		if m.diffActive {
-			switch msg.Type {
-			case tea.KeyUp, tea.KeyDown, tea.KeyPgUp, tea.KeyPgDown, tea.KeyHome, tea.KeyEnd:
-				var diffCmd tea.Cmd
-				m.diffViewer, diffCmd = m.diffViewer.Update(msg)
-				if diffCmd != nil {
-					cmds = append(cmds, diffCmd)
-				}
-				return m, nil
+			// Re-render the inline diff message
+			if m.diffMessageIndex >= 0 && m.diffMessageIndex < len(m.messages) {
+				m.messages[m.diffMessageIndex] = m.diffViewer.RenderFull()
+				m.updateViewportContent()
 			}
+			return m, nil
 		}
 
 		switch msg.Type {
@@ -99,10 +93,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// If pending diff approval, approve it
 			if m.pendingDiffApproval != nil {
-				m.pendingDiffApproval.Approved <- true
+				msg := m.pendingDiffApproval
+				if len(m.messages) > 0 {
+					m.messages[len(m.messages)-1] = m.renderReviewLine(msg.RelPath, msg.Index, msg.Total, "ok")
+					m.updateViewportContent()
+				}
+				msg.Approved <- true
 				m.pendingDiffApproval = nil
 				m.diffActive = false
-				m.recalculateLayout()
 				m.spinnerBar.SetText("Thinking...")
 				return m, nil
 			}
@@ -132,7 +130,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.pendingDiffApproval.Approved <- false
 				m.pendingDiffApproval = nil
 				m.diffActive = false
-				m.recalculateLayout()
 			}
 			return m, tea.Quit
 
@@ -163,15 +160,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// If pending diff approval, reject it
 			if m.pendingDiffApproval != nil {
-				m.pendingDiffApproval.Approved <- false
-				m.pendingDiffApproval = nil
-				m.diffActive = false
-				m.recalculateLayout()
-				m.spinnerBar.SetText("Thinking...")
+				msg := m.pendingDiffApproval
 				if len(m.messages) > 0 {
-					m.messages[len(m.messages)-1] = strings.TrimSuffix(m.messages[len(m.messages)-1], " [Enter/Esc]") + " => rejected"
+					m.messages[len(m.messages)-1] = m.renderReviewLine(msg.RelPath, msg.Index, msg.Total, "skipped")
 					m.updateViewportContent()
 				}
+				msg.Approved <- false
+				m.pendingDiffApproval = nil
+				m.diffActive = false
+				m.spinnerBar.SetText("Thinking...")
 				return m, nil
 			}
 			if m.slashModal.IsActive() {
@@ -276,8 +273,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case AgentDiffPreviewMsg:
 		m.diffViewer.SetContent(msg.OldContent, msg.NewContent, msg.RelPath+" (before)", msg.RelPath+" (after)")
-		m.diffActive = true
-		m.recalculateLayout()
+		// Render the diff inline in the viewport
+		m.diffMessageIndex = len(m.messages)
+		m.AppendRawMessage(m.diffViewer.RenderFull())
 
 	case AgentDiffApprovalMsg:
 		wrapWidth := m.mainWidth() - 2
@@ -285,9 +283,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			wrapWidth = 40
 		}
 		wrapStyle := lipgloss.NewStyle().Width(wrapWidth)
-		displayStr := fmt.Sprintf("  ↳ Approve diff for %s? [Enter/Esc]", msg.RelPath)
+		var displayStr string
+		if msg.Total > 0 {
+			displayStr = fmt.Sprintf("● Review('%s') (%d/%d) [Enter/Esc]", msg.RelPath, msg.Index, msg.Total)
+		} else {
+			displayStr = fmt.Sprintf("● Review('%s') [Enter/Esc]", msg.RelPath)
+		}
 		m.AppendRawMessage(wrapStyle.Render(displayStr))
 		m.pendingDiffApproval = &msg
+		m.diffActive = true
 		m.spinnerBar.SetText("Waiting for diff approval...")
 
 	case AgentPreTaskStartMsg:
@@ -547,6 +551,22 @@ func shouldSuppressModelWarmWarning(modelID string, err error) bool {
 // refreshGitStatus fetches the current git status for the sidebar.
 func refreshGitStatus() tea.Msg {
 	return GitStatusMsg{Status: FetchGitStatus()}
+}
+
+// renderReviewLine builds a formatted review line with the given status suffix.
+func (m Model) renderReviewLine(relPath string, index, total int, status string) string {
+	wrapWidth := m.mainWidth() - 2
+	if wrapWidth < 40 {
+		wrapWidth = 40
+	}
+	wrapStyle := lipgloss.NewStyle().Width(wrapWidth)
+	var displayStr string
+	if total > 0 {
+		displayStr = fmt.Sprintf("● Review('%s') (%d/%d) => %s", relPath, index, total, status)
+	} else {
+		displayStr = fmt.Sprintf("● Review('%s') => %s", relPath, status)
+	}
+	return wrapStyle.Render(displayStr)
 }
 
 // scheduleGitStatusTick returns a command that fires a GitStatusTickMsg after a delay.
