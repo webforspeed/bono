@@ -65,6 +65,9 @@ func handleHelp(m *Model, arg string) tea.Cmd {
 }
 
 func handleClear(m *Model, arg string) tea.Cmd {
+	if m.onSessionClear != nil {
+		m.onSessionClear()
+	}
 	m.ClearMessages()
 	m.agent.Reset()
 	m.agent.ResetCost()

@@ -208,6 +208,10 @@ func main() {
 	dispatcher.On(hooks.Stop, newDiffApprovalHandler(worktreeMgr, p))
 
 	worktreeCreated := false
+	tuiModel.SetOnSessionClear(func() {
+		worktreeMgr.RemoveSession(ctx)
+		worktreeCreated = false
+	})
 	agent.OnToolCall = func(name string, args map[string]any) bool {
 		dispatcher.Fire(ctx, hooks.PreToolUse, hooks.ToolPayload{ToolName: name, Args: args})
 
@@ -375,6 +379,9 @@ func main() {
 		fmt.Printf("Error running TUI: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Clean up worktree before exiting
+	worktreeMgr.RemoveSession(ctx)
 
 	// Fire SessionEnd after TUI exits
 	dispatcher.Fire(ctx, hooks.SessionEnd, hooks.SessionEndPayload{})

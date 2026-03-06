@@ -57,6 +57,9 @@ type Model struct {
 	diffActive       bool // true when diff is pending approval (for Tab key handling)
 	diffMessageIndex int  // index in m.messages where the inline diff is rendered
 
+	// Lifecycle callbacks
+	onSessionClear func() // called on /clear to clean up worktrees etc.
+
 	// Code search watcher metadata
 	watcher *FileWatcher
 
@@ -322,6 +325,11 @@ func (m *Model) SetWatcher(w *FileWatcher) {
 // SetDispatcher sets the hook dispatcher for lifecycle events.
 func (m *Model) SetDispatcher(d *hooks.Dispatcher) {
 	m.dispatcher = d
+}
+
+// SetOnSessionClear sets a callback invoked during /clear for cleanup (e.g. worktrees).
+func (m *Model) SetOnSessionClear(fn func()) {
+	m.onSessionClear = fn
 }
 
 // AgentResponseMsg is sent when the agent finishes processing.

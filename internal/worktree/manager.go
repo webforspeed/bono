@@ -149,6 +149,23 @@ func (m *Manager) RecordCompleted(meta PathRewrite) {
 	m.completedRewrites = append(m.completedRewrites, meta)
 }
 
+// RemoveSession removes the current worktree and its branch, clearing all state.
+func (m *Manager) RemoveSession(ctx context.Context) {
+	m.mu.Lock()
+	s := m.session
+	m.session = nil
+	m.rewrites = make(map[string][]PathRewrite)
+	m.completedRewrites = nil
+	m.completedSet = make(map[string]bool)
+	m.mu.Unlock()
+
+	if s == nil {
+		return
+	}
+	GitOutput(ctx, s.RepoRoot, "worktree", "remove", "--force", s.WorktreeRoot)
+	GitOutput(ctx, s.RepoRoot, "branch", "-D", s.BranchName)
+}
+
 // DrainCompleted returns and clears all accumulated completed rewrites.
 func (m *Manager) DrainCompleted() []PathRewrite {
 	m.mu.Lock()
