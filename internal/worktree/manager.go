@@ -29,11 +29,12 @@ type PathRewrite struct {
 	WasNewFile    bool
 	BeforeContent string
 	AfterContent  string // post-write content captured in OnToolDone
+	RepoRoot      string // repo root this rewrite belongs to (for multi-repo support)
 }
 
 type Manager struct {
 	mu                sync.Mutex
-	session           *Session
+	sessions          map[string]*Session // keyed by repo root
 	rewrites          map[string][]PathRewrite
 	completedRewrites []PathRewrite   // accumulated for batch approval after loop
 	completedSet      map[string]bool // dedup by RelPath
@@ -41,29 +42,29 @@ type Manager struct {
 
 func NewManager() *Manager {
 	return &Manager{
+		sessions:     make(map[string]*Session),
 		rewrites:     make(map[string][]PathRewrite),
 		completedSet: make(map[string]bool),
 	}
 }
 
-func (m *Manager) EnsureSession(ctx context.Context, cwd string) (*Session, error) {
+// EnsureSession returns (or creates) a worktree session for the repo that
+// contains filePath. The cwd is used to resolve relative file paths.
+func (m *Manager) EnsureSession(ctx context.Context, cwd, filePath string) (*Session, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.session != nil {
-		if _, err := os.Stat(m.session.WorktreeRoot); err == nil {
-			return m.session, nil
-		}
-		m.session = nil // stale path; recreate
+	repoRoot, err := resolveRepoRoot(ctx, cwd, filePath)
+	if err != nil {
+		return nil, err
 	}
 
-	repoRoot, err := GitOutput(ctx, cwd, "rev-parse", "--show-toplevel")
-	if err != nil {
-		return nil, fmt.Errorf("resolve repo root: %w", err)
-	}
-	repoRoot = strings.TrimSpace(repoRoot)
-	if repoRoot == "" {
-		return nil, fmt.Errorf("empty repo root")
+	// Return existing session if still valid.
+	if s, ok := m.sessions[repoRoot]; ok {
+		if _, err := os.Stat(s.WorktreeRoot); err == nil {
+			return s, nil
+		}
+		delete(m.sessions, repoRoot) // stale
 	}
 
 	id, err := randomWorktreeID()
@@ -87,8 +88,41 @@ func (m *Manager) EnsureSession(ctx context.Context, cwd string) (*Session, erro
 		ID:           id,
 		CreatedAt:    time.Now(),
 	}
-	m.session = s
+	m.sessions[repoRoot] = s
 	return s, nil
+}
+
+// resolveRepoRoot finds the git repo root for a file path.
+func resolveRepoRoot(ctx context.Context, cwd, filePath string) (string, error) {
+	var abs string
+	if filepath.IsAbs(filePath) {
+		abs = filepath.Clean(filePath)
+	} else {
+		abs = filepath.Clean(filepath.Join(cwd, filePath))
+	}
+
+	// Walk up from the file's directory to find an existing directory.
+	dir := filepath.Dir(abs)
+	for {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("no existing parent directory for %s", filePath)
+		}
+		dir = parent
+	}
+
+	root, err := GitOutput(ctx, dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", fmt.Errorf("resolve repo root for %s: %w", filePath, err)
+	}
+	root = strings.TrimSpace(root)
+	if root == "" {
+		return "", fmt.Errorf("empty repo root for %s", filePath)
+	}
+	return root, nil
 }
 
 func (m *Manager) RewritePathForWorktree(session *Session, inputPath string) (relPath, rewrittenAbs string, err error) {
@@ -107,10 +141,15 @@ func (m *Manager) RegisterRewrite(meta PathRewrite) {
 	m.rewrites[k] = append(m.rewrites[k], meta)
 }
 
-func (m *Manager) CurrentSession() *Session {
+// Sessions returns all active worktree sessions (for cleanup, hooks, etc.).
+func (m *Manager) Sessions() []*Session {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.session
+	out := make([]*Session, 0, len(m.sessions))
+	for _, s := range m.sessions {
+		out = append(out, s)
+	}
+	return out
 }
 
 func (m *Manager) ConsumeRewrite(toolName, rewrittenAbs string) (PathRewrite, bool) {
@@ -131,39 +170,39 @@ func (m *Manager) ConsumeRewrite(toolName, rewrittenAbs string) (PathRewrite, bo
 }
 
 // RecordCompleted stores a completed rewrite for batch approval after the loop.
-// Deduped by RelPath: first BeforeContent wins, latest AfterContent overwrites.
+// Deduped by RepoRoot+RelPath: first BeforeContent wins, latest AfterContent overwrites.
 func (m *Manager) RecordCompleted(meta PathRewrite) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.completedSet[meta.RelPath] {
+	key := meta.RepoRoot + "|" + meta.RelPath
+	if m.completedSet[key] {
 		// Update AfterContent for existing entry (same file edited again).
 		for i := range m.completedRewrites {
-			if m.completedRewrites[i].RelPath == meta.RelPath {
+			if m.completedRewrites[i].RepoRoot == meta.RepoRoot && m.completedRewrites[i].RelPath == meta.RelPath {
 				m.completedRewrites[i].AfterContent = meta.AfterContent
 				return
 			}
 		}
 		return
 	}
-	m.completedSet[meta.RelPath] = true
+	m.completedSet[key] = true
 	m.completedRewrites = append(m.completedRewrites, meta)
 }
 
-// RemoveSession removes the current worktree and its branch, clearing all state.
-func (m *Manager) RemoveSession(ctx context.Context) {
+// RemoveAllSessions removes all worktrees and branches, clearing all state.
+func (m *Manager) RemoveAllSessions(ctx context.Context) {
 	m.mu.Lock()
-	s := m.session
-	m.session = nil
+	sessions := m.sessions
+	m.sessions = make(map[string]*Session)
 	m.rewrites = make(map[string][]PathRewrite)
 	m.completedRewrites = nil
 	m.completedSet = make(map[string]bool)
 	m.mu.Unlock()
 
-	if s == nil {
-		return
+	for _, s := range sessions {
+		GitOutput(ctx, s.RepoRoot, "worktree", "remove", "--force", s.WorktreeRoot)
+		GitOutput(ctx, s.RepoRoot, "branch", "-D", s.BranchName)
 	}
-	GitOutput(ctx, s.RepoRoot, "worktree", "remove", "--force", s.WorktreeRoot)
-	GitOutput(ctx, s.RepoRoot, "branch", "-D", s.BranchName)
 }
 
 // DrainCompleted returns and clears all accumulated completed rewrites.

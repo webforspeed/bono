@@ -207,10 +207,10 @@ func main() {
 	// Register batch diff approval on Stop hook (fires after agent.Chat returns).
 	dispatcher.On(hooks.Stop, newDiffApprovalHandler(worktreeMgr, p))
 
-	worktreeCreated := false
+	worktreeCreatedFor := map[string]bool{} // track per-repo worktree creation for hook firing
 	tuiModel.SetOnSessionClear(func() {
-		worktreeMgr.RemoveSession(ctx)
-		worktreeCreated = false
+		worktreeMgr.RemoveAllSessions(ctx)
+		worktreeCreatedFor = map[string]bool{}
 	})
 	agent.OnToolCall = func(name string, args map[string]any) bool {
 		dispatcher.Fire(ctx, hooks.PreToolUse, hooks.ToolPayload{ToolName: name, Args: args})
@@ -223,10 +223,10 @@ func main() {
 
 		if name == "write_file" || name == "edit_file" {
 			originalPath, _ := args["path"].(string)
-			session, err := worktreeMgr.EnsureSession(ctx, cwd)
+			session, err := worktreeMgr.EnsureSession(ctx, cwd, originalPath)
 			if err == nil {
-				if !worktreeCreated {
-					worktreeCreated = true
+				if !worktreeCreatedFor[session.RepoRoot] {
+					worktreeCreatedFor[session.RepoRoot] = true
 					dispatcher.Fire(ctx, hooks.WorktreeCreate, hooks.WorktreePayload{Path: session.WorktreeRoot})
 				}
 				relPath, rewrittenAbs, err := worktreeMgr.RewritePathForWorktree(session, originalPath)
@@ -241,6 +241,7 @@ func main() {
 							RewrittenAbs:  rewrittenAbs,
 							WasNewFile:    wasNewFile,
 							BeforeContent: beforeContent,
+							RepoRoot:      session.RepoRoot,
 						})
 						p.Send(tui.AgentToolCallMsg{Name: name, Args: args})
 						return true
@@ -380,8 +381,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Clean up worktree before exiting
-	worktreeMgr.RemoveSession(ctx)
+	// Clean up worktrees before exiting
+	worktreeMgr.RemoveAllSessions(ctx)
 
 	// Fire SessionEnd after TUI exits
 	dispatcher.Fire(ctx, hooks.SessionEnd, hooks.SessionEndPayload{})
@@ -392,8 +393,7 @@ func main() {
 func newDiffApprovalHandler(mgr *worktree.Manager, p *tea.Program) hooks.Handler {
 	return hooks.HandlerFunc(func(ctx context.Context, _ hooks.Event, _ any) {
 		completed := mgr.DrainCompleted()
-		session := mgr.CurrentSession()
-		if len(completed) == 0 || session == nil {
+		if len(completed) == 0 {
 			return
 		}
 		for i, cr := range completed {
@@ -412,7 +412,7 @@ func newDiffApprovalHandler(mgr *worktree.Manager, p *tea.Program) hooks.Handler
 			select {
 			case ok := <-approved:
 				if ok {
-					if err := worktree.PromoteRewrite(cr, session.RepoRoot); err != nil {
+					if err := worktree.PromoteRewrite(cr, cr.RepoRoot); err != nil {
 						p.Send(tui.AgentErrorMsg{Err: fmt.Errorf("promote %s: %w", cr.RelPath, err)})
 					}
 				}
