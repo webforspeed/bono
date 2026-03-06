@@ -40,3 +40,5 @@ __debug_bin*
 
 # Index
 .bono/
+*.code-workspace
+.spec/
