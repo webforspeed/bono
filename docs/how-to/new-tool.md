@@ -8,8 +8,8 @@ All tool definitions live in **bono-core**. Each tool is a `*ToolDef` — same s
 |------|-------|
 | Tool definition + execution | `bono-core/tool_<name>.go` |
 | Tool registration | `bono-core/agent.go` → `NewAgent()` |
-| Approval policy | `bono/main.go` → `agent.OnToolCall` |
-| Display formatting | `bono/tui/update.go` → `formatTool()` |
+| Approval policy | `bono/internal/session/session.go` |
+| Display formatting | `bono/internal/session/display.go` → `FormatTool()` |
 
 ## Steps
 
@@ -45,7 +45,7 @@ a.registry.Register(MyTool())
 
 ### 3. Add display formatting in bono
 
-In `bono/tui/update.go`, add a case to `formatTool()` so the TUI shows a readable one-liner for this tool.
+In `bono/internal/session/display.go`, add a case to `FormatTool()` so all frontends share the same readable one-liner for this tool.
 
 ### 4. Verify
 
@@ -82,7 +82,7 @@ See `RunShellTool(exec)` and `CompactContextTool(compact)` for working examples.
 ## Constraints
 
 - Tool names are stable identifiers — changing a name is a breaking change for conversation history.
-- `AutoApprove` controls the default policy. Bono's `OnToolCall` hook can override.
+- `AutoApprove` controls the default policy. Bono's session layer can override per frontend or runtime mode.
 - `Description` is policy for the model — keep it about intent and constraints, not implementation details.
 - Parameters use JSON Schema as `map[string]any`. Match existing tools for consistency.
 - Prefer composable primitives over specialized tools. A new tool should earn its place.

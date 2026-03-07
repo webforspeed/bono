@@ -2,27 +2,28 @@
 
 ## Two Hook Layers
 
-Bono has two distinct hook layers that work together:
+Bono has two distinct layers that work together:
 
-**bono-core callbacks** — Low-level function fields on the `Agent` struct (`OnToolCall`, `OnToolDone`, `OnMessage`, etc.). These are the plumbing between the agent loop and the TUI. They carry operational data and can influence control flow (e.g. `OnToolCall` returns `bool` to approve/reject).
+**bono-core callbacks** — Low-level function fields on the `Agent` struct (`OnToolCall`, `OnToolDone`, `OnMessage`, etc.). These are the plumbing between the agent loop and Bono's session layer. They carry operational data and can influence control flow (e.g. `OnToolCall` returns `bool` to approve/reject).
 
 **bono lifecycle hooks** — Higher-level event system in the `hooks/` package. These are observability primitives modeled after Claude Code's hook events. They fire at lifecycle boundaries and are fire-and-forget — they cannot block or alter execution.
 
-```
-bono-core (agent loop)          bono (TUI + hooks)
-─────────────────────           ──────────────────
-Agent.OnToolCall ──────────────► main.go callback
+```text
+bono-core (agent loop)          bono (session + hooks + frontends)
+─────────────────────           ───────────────────────────────────
+Agent.OnToolCall ──────────────► internal/session.Session
                                   ├─ dispatcher.Fire(PreToolUse)
                                   ├─ dispatcher.Fire(PermissionRequest)  [if approval needed]
-                                  └─ return true/false
+                                  ├─ frontend.HandleEvent(...)
+                                  └─ frontend.RequestApproval(...)
 
-Agent.OnToolDone ──────────────► main.go callback
+Agent.OnToolDone ──────────────► internal/session.Session
                                   ├─ dispatcher.Fire(PostToolUse)        [if success]
                                   ├─ dispatcher.Fire(PostToolUseFailure) [if failure]
-                                  └─ p.Send(AgentToolDoneMsg)
+                                  └─ frontend.HandleEvent(...)
 ```
 
-The lifecycle hooks ride on top of the bono-core callbacks. bono-core stays unaware of the hook system.
+The lifecycle hooks ride on top of the bono-core callbacks. bono-core stays unaware of Bono's hook system and frontend implementations.
 
 ## Architecture
 
@@ -83,5 +84,6 @@ To swap the logging backend, pass a different `slog.Handler` (e.g. `slog.NewText
 2. `hooks/hooks.go` (Handler, Dispatcher)
 3. `hooks/log_handler.go` (default handler)
 4. `internal/logging/logging.go` (slog factory)
-5. `main.go` (dispatcher setup + where each event fires)
-6. `tui/model.go` (`UserPromptSubmit` + `Stop` firing)
+5. `main.go` (dispatcher setup + mode selection)
+6. `internal/session/session.go` (callback wiring + prompt lifecycle)
+7. `tui/model.go` (`UserPromptSubmit` for the interactive TUI path)

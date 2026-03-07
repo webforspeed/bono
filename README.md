@@ -1,11 +1,12 @@
 # bono - An autonomous agent in the terminal
 
-A terminal coding agent frontend written in Go. Bono provides the TUI, slash-command UX, and tool approval flow, while `bono-core` handles the agent loop and tool execution.
+A terminal coding agent frontend written in Go. Bono provides the fullscreen TUI, the headless prompt mode, shared session frontends, and the user-facing approval flow, while `bono-core` handles the agent loop and tool execution.
 
 ## Screenshot
 ![bono screenshot](./docs/assets/screenshot_2.png)
 
 ## Features
+- **Modes:** Fullscreen TUI by default, plus headless prompt mode via `bono -p "..."` / `bono --prompt "..."`.
 - **Slash:** Slash-command-first UX (`/init`, `/index`, `/model`, `/spinner`, `/clear`, `/help`, `/exit`)
 - **BYOK:** OpenRouter BYOK support via `OPENROUTER_API_KEY`
 - **Search:** Semantic code search with vector indexing and repo stats in the status row
@@ -13,7 +14,7 @@ A terminal coding agent frontend written in Go. Bono provides the TUI, slash-com
 - **Sandbox:** Default sandboxed command execution with approval fallbacks for unsandboxed runs
 - **Runtime:** Programmatic tool calling with `python_runtime` for complex multi-step workflows that save context window
 - **Compaction:** Intelligent context compaction to reduce risk of hitting context limits
-- **Telemetry:** Live context and cost telemetry in the TUI
+- **Telemetry:** Live context and cost telemetry in the TUI, with shared session events available to headless and future frontends
 - **Models:** Switch LLMs at runtime via slash command (`/model`)
 - **Reasoning:** Configurable reasoning effort via `/reasoning` — supports `minimal`, `low`, `medium`, `high`, and `xhigh` levels.
 - **Streaming:** Live token-by-token response streaming with real-time reasoning and content deltas
@@ -67,6 +68,18 @@ make release TAG=v0.1.0
 go run .
 ```
 
+Run a single prompt in headless mode:
+
+```bash
+go run . -p "Find and fix the bug in auth.py"
+```
+
+Installed binary usage:
+
+```bash
+bono -p "Find and fix the bug in auth.py"
+```
+
 ## Slash Commands
 - `/init`: run exploring agent
 - `/index`: index codebase for semantic search
@@ -83,7 +96,8 @@ go run .
 - Bono status footer shows build mode/version: `Bono (dev)` for local builds and `Bono vX.Y.Z` for release builds.
 - Bono checks GitHub releases in the background and shows `new version available` in the footer for newer tags.
 - Set `BONO_DISABLE_UPDATE_CHECK=1` to skip update checks.
-- Bono repo owns TUI and UX behavior; `bono-core` owns agent loop, tools, and web/tool internals.
+- In headless mode, Bono streams the same session events into the terminal transcript and uses inline approval prompts like `Approve? [y/N]`.
+- Bono repo owns terminal-facing UX behavior and session frontends; `bono-core` owns agent loop, tools, and web/tool internals.
 
 ## Vision and Philosophy
 Bono is built around a simple thesis: the best coding agents do not need heavy scaffolding, sprawling configuration, or vendor lock-in. Models are already highly capable and getting better quickly, so the harness should stay small, portable, and opinionated only where it meaningfully improves the experience.
