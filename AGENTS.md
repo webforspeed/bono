@@ -1,7 +1,7 @@
 # Bono - A coding agent written in Go
 
-This guide should be used when working in Bono repo. Bono repo is a TUI frontend repo and depends on bono-core repo which contains the agentic loop and tools.
-All code changes related hooks, TUI and user facing behaviors should be done in this Bono repo. All changes related to agentic loop, tool calls, web requests etc should be in bono-core repo.
+This guide should be used when working in Bono repo. Bono repo owns the terminal-facing frontends and UX for Bono, including the fullscreen TUI, headless prompt mode, shared session frontends, hooks, and approval conventions. It depends on bono-core repo which contains the agentic loop and tools.
+All code changes related to hooks, terminal UX, session frontends, headless/TUI behavior, and other user-facing behaviors should be done in this Bono repo. All changes related to agentic loop, tool calls, web requests etc should be in bono-core repo.
 
 
 ## When Working (Practical)

@@ -35,9 +35,9 @@ Chat(input)
   ├─ send apiTools to LLM via ChatCompletionWithTools
   ├─ LLM responds with ToolCalls
   └─ for each tool call:
-       ├─ OnToolCall hook (bono decides approval)
+       ├─ OnToolCall hook (bono session decides approval)
        ├─ registry.Get(name).Execute(args)   ← uniform, one path
-       ├─ OnToolDone hook (bono updates TUI)
+       ├─ OnToolDone hook (bono emits session events)
        └─ append ToolResult as "tool" message
 ```
 
@@ -51,7 +51,7 @@ Every tool goes through the same `tool.Execute(args)` dispatch. No name-based sw
 // All tools (default)
 config.AllowedTools = nil
 
-// Restricted set (future headless mode)
+// Restricted set (for a specific frontend or deployment mode)
 config.AllowedTools = []string{"read_file", "edit_file", "run_shell"}
 ```
 
@@ -76,7 +76,7 @@ Each tool declares its default policy via `AutoApprove(sandboxed bool)`:
 | `run_shell`, `python_runtime` | true when sandboxed |
 | `write_file`, `edit_file` | always false |
 
-Bono's `OnToolCall` hook in `main.go` makes the final decision — it can override AutoApprove for TUI-specific behavior (channel-based Enter/Esc approval).
+Bono's session layer in `internal/session/session.go` makes the final decision — it can override AutoApprove for frontend-specific behavior such as TUI `Enter/Esc` approval or headless `[y/N]` prompts.
 
 ## Design Intent
 
@@ -91,5 +91,5 @@ Bono's `OnToolCall` hook in `main.go` makes the final decision — it can overri
 2. `bono-core/registry.go`
 3. `bono-core/tool_*.go` (any one tool file for the pattern)
 4. `bono-core/agent.go` (`NewAgent` registry setup + `Chat` dispatch)
-5. `bono/main.go` (`OnToolCall`, `OnToolDone`, `OnSandboxFallback`)
-6. `bono/tui/update.go` (`formatTool`)
+5. `bono/internal/session/session.go` (`OnToolCall`, `OnToolDone`, `OnSandboxFallback`)
+6. `bono/internal/session/display.go` (shared tool formatting)

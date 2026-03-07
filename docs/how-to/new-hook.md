@@ -9,8 +9,9 @@ All hook code lives in **bono** (not bono-core). The hook system is an observabi
 | Event constants + payloads | `hooks/event.go` |
 | Handler interface + Dispatcher | `hooks/hooks.go` |
 | Default log handler | `hooks/log_handler.go` |
-| Event firing (most events) | `main.go` |
-| Event firing (TUI events) | `tui/model.go` |
+| Event firing (session lifecycle + most agent events) | `internal/session/session.go` |
+| Event firing (program lifecycle + dispatcher setup) | `main.go` |
+| Event firing (TUI-originated user interaction) | `tui/model.go` |
 | Handler registration | `main.go` (dispatcher setup block) |
 
 ## Steps
@@ -32,7 +33,7 @@ type MyNewEventPayload struct {
 
 Decide where the event should fire. Two options:
 
-**From `main.go`** — if it corresponds to an agent callback or program lifecycle point:
+**From `internal/session/session.go` or `main.go`** — if it corresponds to an agent callback, prompt lifecycle point, or program lifecycle point:
 ```go
 dispatcher.Fire(ctx, hooks.MyNewEvent, hooks.MyNewEventPayload{...})
 ```
@@ -62,13 +63,13 @@ Build both repos. Run bono, trigger the event, and check `logs/bono.jsonl` for t
 
 | Origin | Fire from | Example |
 |--------|-----------|---------|
-| Agent loop (tool calls, responses) | `main.go` via bono-core callback | `PreToolUse`, `PostToolUse` |
+| Agent loop (tool calls, responses) | `internal/session/session.go` via bono-core callback | `PreToolUse`, `PostToolUse` |
 | User interaction (input, navigation) | `tui/model.go` | `UserPromptSubmit` |
 | Program lifecycle (start, exit) | `main.go` | `SessionStart`, `SessionEnd` |
-| Infrastructure (indexing, batch review) | `main.go` or relevant manager | `Stop` |
+| Infrastructure (indexing, batch review) | `main.go`, `internal/session/session.go`, or relevant manager | `Stop` |
 
 ## Constraints
 
 - Hook events are fire-and-forget. Do not use them for control flow decisions.
 - Payload structs use exported fields so `slog` can serialize them as JSON.
-- If an event needs a bono-core callback that doesn't exist, add the callback to bono-core's `Agent` struct and wire it in `main.go`. The hook system stays in bono.
+- If an event needs a bono-core callback that doesn't exist, add the callback to bono-core's `Agent` struct and wire it in Bono's session layer. The hook system stays in bono.
