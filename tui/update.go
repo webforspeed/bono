@@ -67,11 +67,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.diffActive && msg.Type == tea.KeyTab {
 			m.diffViewer.ToggleMode()
-			// Re-render the inline diff message
-			if m.diffMessageIndex >= 0 && m.diffMessageIndex < len(m.messages) {
-				m.messages[m.diffMessageIndex] = m.diffViewer.RenderFull()
-				m.updateViewportContent()
-			}
+			m.rerenderDiffPreviews()
 			return m, nil
 		}
 
@@ -91,16 +87,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.spinnerBar.SetText("Running unsandboxed...")
 				return m, nil
 			}
-			// If pending diff approval, approve it
-			if m.pendingDiffApproval != nil {
-				msg := m.pendingDiffApproval
+			// If a change batch is awaiting review, approve it.
+			if m.pendingBatchApproval != nil {
+				msg := m.pendingBatchApproval
 				if len(m.messages) > 0 {
-					m.messages[len(m.messages)-1] = m.renderReviewLine(msg.RelPath, msg.Index, msg.Total, "ok")
+					m.messages[len(m.messages)-1] = m.renderBatchReviewLine(msg.Count, "approved")
 					m.updateViewportContent()
 				}
 				msg.Approved <- true
-				m.pendingDiffApproval = nil
+				m.pendingBatchApproval = nil
 				m.diffActive = false
+				m.diffPreviews = nil
 				m.spinnerBar.SetText("Thinking...")
 				return m, nil
 			}
@@ -126,10 +123,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.pendingSandboxFallback.Approved <- false
 				m.pendingSandboxFallback = nil
 			}
-			if m.pendingDiffApproval != nil {
-				m.pendingDiffApproval.Approved <- false
-				m.pendingDiffApproval = nil
+			if m.pendingBatchApproval != nil {
+				m.pendingBatchApproval.Approved <- false
+				m.pendingBatchApproval = nil
 				m.diffActive = false
+				m.diffPreviews = nil
 			}
 			return m, tea.Quit
 
@@ -158,16 +156,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-			// If pending diff approval, reject it
-			if m.pendingDiffApproval != nil {
-				msg := m.pendingDiffApproval
+			// If a change batch is awaiting review, undo it.
+			if m.pendingBatchApproval != nil {
+				msg := m.pendingBatchApproval
 				if len(m.messages) > 0 {
-					m.messages[len(m.messages)-1] = m.renderReviewLine(msg.RelPath, msg.Index, msg.Total, "skipped")
+					m.messages[len(m.messages)-1] = m.renderBatchReviewLine(msg.Count, "undone")
 					m.updateViewportContent()
 				}
 				msg.Approved <- false
-				m.pendingDiffApproval = nil
+				m.pendingBatchApproval = nil
 				m.diffActive = false
+				m.diffPreviews = nil
 				m.spinnerBar.SetText("Thinking...")
 				return m, nil
 			}
@@ -276,27 +275,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, refreshGitStatus)
 
 	case AgentDiffPreviewMsg:
-		m.diffViewer.SetContent(msg.OldContent, msg.NewContent, msg.RelPath+" (before)", msg.RelPath+" (after)")
-		// Render the diff inline in the viewport
-		m.diffMessageIndex = len(m.messages)
-		m.AppendRawMessage(m.diffViewer.RenderFull())
+		rendered := m.renderDiffPreview(msg)
+		messageIndex := len(m.messages)
+		m.AppendRawMessage(rendered)
+		m.diffPreviews = append(m.diffPreviews, diffPreviewBlock{
+			messageIndex: messageIndex,
+			preview:      msg,
+		})
 
-	case AgentDiffApprovalMsg:
+	case AgentChangeBatchApprovalMsg:
 		wrapWidth := m.mainWidth() - 2
 		if wrapWidth < 40 {
 			wrapWidth = 40
 		}
 		wrapStyle := lipgloss.NewStyle().Width(wrapWidth)
-		var displayStr string
-		if msg.Total > 0 {
-			displayStr = fmt.Sprintf("● Review('%s') (%d/%d) [Enter/Esc]", msg.RelPath, msg.Index, msg.Total)
-		} else {
-			displayStr = fmt.Sprintf("● Review('%s') [Enter/Esc]", msg.RelPath)
-		}
+		displayStr := fmt.Sprintf("● %s [Enter/Esc]", batchReviewPrompt(msg.Count))
 		m.AppendRawMessage(wrapStyle.Render(displayStr))
-		m.pendingDiffApproval = &msg
+		m.pendingBatchApproval = &msg
 		m.diffActive = true
-		m.spinnerBar.SetText("Waiting for diff approval...")
+		m.spinnerBar.SetText("Waiting for change approval...")
 
 	case AgentPreTaskStartMsg:
 		m.AppendRawMessage(fmt.Sprintf("● Running %s agent...", string(msg)))
@@ -557,20 +554,50 @@ func refreshGitStatus() tea.Msg {
 	return GitStatusMsg{Status: FetchGitStatus()}
 }
 
-// renderReviewLine builds a formatted review line with the given status suffix.
-func (m Model) renderReviewLine(relPath string, index, total int, status string) string {
+// renderBatchReviewLine builds a formatted batch review line with the given status suffix.
+func (m Model) renderBatchReviewLine(count int, status string) string {
 	wrapWidth := m.mainWidth() - 2
 	if wrapWidth < 40 {
 		wrapWidth = 40
 	}
 	wrapStyle := lipgloss.NewStyle().Width(wrapWidth)
-	var displayStr string
-	if total > 0 {
-		displayStr = fmt.Sprintf("● Review('%s') (%d/%d) => %s", relPath, index, total, status)
-	} else {
-		displayStr = fmt.Sprintf("● Review('%s') => %s", relPath, status)
-	}
+	displayStr := fmt.Sprintf("● %s => %s", batchReviewPrompt(count), status)
 	return wrapStyle.Render(displayStr)
+}
+
+func batchReviewPrompt(count int) string {
+	label := "changes"
+	if count == 1 {
+		label = "change"
+	}
+	return fmt.Sprintf("Approve %d %s or Undo", count, label)
+}
+
+func (m *Model) rerenderDiffPreviews() {
+	for _, block := range m.diffPreviews {
+		if block.messageIndex >= 0 && block.messageIndex < len(m.messages) {
+			m.messages[block.messageIndex] = m.renderDiffPreview(block.preview)
+		}
+	}
+	m.updateViewportContent()
+}
+
+func (m Model) renderDiffPreview(preview AgentDiffPreviewMsg) string {
+	viewer := NewDiffViewer()
+	viewer.viewMode = m.diffViewer.viewMode
+
+	width := m.mainWidth() - 2
+	if width < 40 {
+		width = 40
+	}
+	viewer.SetSize(width, 20)
+	viewer.SetContent(
+		preview.OldContent,
+		preview.NewContent,
+		preview.RelPath+" (before)",
+		preview.RelPath+" (after)",
+	)
+	return viewer.RenderFull()
 }
 
 // scheduleGitStatusTick returns a command that fires a GitStatusTickMsg after a delay.

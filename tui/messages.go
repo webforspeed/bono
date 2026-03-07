@@ -27,11 +27,9 @@ type AgentDiffPreviewMsg struct {
 	NewContent string
 }
 
-// AgentDiffApprovalMsg asks user to approve/reject a diff preview.
-type AgentDiffApprovalMsg struct {
-	RelPath  string
-	Index    int       // 1-based position in batch (0 = not part of batch)
-	Total    int       // total diffs in batch (0 = not part of batch)
+// AgentChangeBatchApprovalMsg asks the user to approve or undo a batch of changes.
+type AgentChangeBatchApprovalMsg struct {
+	Count    int
 	Approved chan bool // TUI sends approval here (Enter=true, Esc=false)
 }
 
