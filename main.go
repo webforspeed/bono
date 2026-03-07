@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"runtime"
@@ -15,8 +17,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	core "github.com/webforspeed/bono-core"
 	"github.com/webforspeed/bono/hooks"
-	"github.com/webforspeed/bono/internal/changebatch"
 	"github.com/webforspeed/bono/internal/logging"
+	"github.com/webforspeed/bono/internal/session"
 	"github.com/webforspeed/bono/prompts"
 	"github.com/webforspeed/bono/tui"
 )
@@ -28,8 +30,38 @@ const updateCheckTimeout = 3 * time.Second
 // version is set at build time via -ldflags "-X main.version=vX.Y.Z".
 var version = "dev"
 
+type cliOptions struct {
+	Prompt string
+}
+
+func (o cliOptions) Headless() bool {
+	return strings.TrimSpace(o.Prompt) != ""
+}
+
+func parseCLIArgs(args []string) (cliOptions, error) {
+	var opts cliOptions
+
+	fs := flag.NewFlagSet("bono", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	fs.StringVar(&opts.Prompt, "p", "", "run a single prompt in headless mode")
+	fs.StringVar(&opts.Prompt, "prompt", "", "run a single prompt in headless mode")
+
+	if err := fs.Parse(args); err != nil {
+		return cliOptions{}, err
+	}
+	if fs.NArg() > 0 {
+		return cliOptions{}, fmt.Errorf("unexpected arguments: %s", strings.Join(fs.Args(), " "))
+	}
+	return opts, nil
+}
+
 func main() {
 	loadEnv()
+	opts, err := parseCLIArgs(os.Args[1:])
+	if err != nil {
+		fmt.Printf("Error parsing arguments: %v\n", err)
+		os.Exit(1)
+	}
 
 	cwd, _ := os.Getwd()
 	if cwd == "" {
@@ -169,7 +201,42 @@ func main() {
 		fmt.Printf("Warning: web tools unavailable: %v\n", err)
 	}
 
-	// Create TUI model
+	// Warm model limits in background so context usage shows from the first response.
+	go func() {
+		warmCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		_ = agent.WarmModelUsageLimits(warmCtx, model)
+	}()
+
+	if opts.Headless() {
+		if err := runHeadless(ctx, cwd, config, agent, dispatcher, opts); err != nil {
+			os.Exit(1)
+		}
+		return
+	}
+
+	if err := runTUI(ctx, cwd, version, models, config, agent, dispatcher); err != nil {
+		fmt.Printf("Error running TUI: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func runHeadless(ctx context.Context, cwd string, config core.Config, agent *core.Agent, dispatcher *hooks.Dispatcher, opts cliOptions) error {
+	frontend := session.Chain(
+		session.NewHeadlessFrontend(os.Stdout, os.Stdin),
+		session.SynchronizedMiddleware(),
+	)
+	sess := session.New(agent, dispatcher, session.Config{
+		CWD:         cwd,
+		ShellPolicy: config.ShellPolicy,
+	}, frontend)
+	dispatcher.On(hooks.Stop, sess.StopHandler())
+	sess.Bind(ctx)
+	_, err := sess.RunPrompt(ctx, opts.Prompt)
+	return err
+}
+
+func runTUI(ctx context.Context, cwd, version string, models []tui.ModelInfo, config core.Config, agent *core.Agent, dispatcher *hooks.Dispatcher) error {
 	tuiModel := tui.NewWithOptions(agent, ctx, tui.SpinnerDot, models)
 	tuiModel.SetStatusBarText(tui.StatusBarText(version))
 	tuiModel.SetDispatcher(dispatcher)
@@ -180,7 +247,6 @@ func main() {
 		tuiModel.SetWatcher(watcher)
 	}
 
-	// Set initial index status in sidebar
 	if svc := agent.CodeSearchService(); svc != nil {
 		stats, err := svc.CodeSearchStats()
 		if err == nil && stats.TotalChunks > 0 {
@@ -188,223 +254,33 @@ func main() {
 		}
 	}
 
-	// Create Bubble Tea program (use alt screen for full viewport)
 	p := tea.NewProgram(&tuiModel, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	tuiModel.SetProgram(p)
 	startUpdateCheck(ctx, p, version)
 
-	// Warm model limits in background so context usage shows from the first response.
-	go func() {
-		warmCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-		_ = agent.WarmModelUsageLimits(warmCtx, model)
-	}()
-
-	// Start file watcher
 	if watcher != nil {
 		go watcher.Start(ctx, func(count int) {
 			p.Send(tui.WatcherNotifyMsg{ChangedCount: count})
 		})
 	}
 
-	// Set up agent hooks to send messages to TUI
-	var changeBatchMgr changebatch.BatchTracker = changebatch.NewManager()
+	frontend := session.Chain(
+		tui.NewSessionFrontend(p),
+		session.SynchronizedMiddleware(),
+	)
+	sess := session.New(agent, dispatcher, session.Config{
+		CWD:         cwd,
+		ShellPolicy: config.ShellPolicy,
+	}, frontend)
+	dispatcher.On(hooks.Stop, sess.StopHandler())
+	tuiModel.SetOnSessionClear(sess.Reset)
+	sess.Bind(ctx)
 
-	// Register batch review on Stop hook (fires after agent.Chat returns).
-	dispatcher.On(hooks.Stop, newChangeBatchReviewHandler(changeBatchMgr, p))
-
-	tuiModel.SetOnSessionClear(func() {
-		changeBatchMgr.Reset()
-	})
-	agent.OnToolCall = func(name string, args map[string]any) bool {
-		dispatcher.Fire(ctx, hooks.PreToolUse, hooks.ToolPayload{ToolName: name, Args: args})
-
-		if name == "read_file" || name == "compact_context" || name == "code_search" || name == "WebSearch" || name == "WebFetch" {
-			// Auto-approve read-only tools
-			p.Send(tui.AgentToolCallMsg{Name: name, Args: args})
-			return true
-		}
-
-		if name == "write_file" || name == "edit_file" {
-			originalPath, _ := args["path"].(string)
-			if _, err := changeBatchMgr.BeginChange(cwd, name, originalPath); err != nil {
-				p.Send(tui.AgentErrorMsg{Err: fmt.Errorf("track %s change: %w", originalPath, err)})
-				return false
-			}
-			p.Send(tui.AgentToolCallMsg{Name: name, Args: args})
-			return true
-		}
-
-		if name == "run_shell" || name == "python_runtime" {
-			req := core.ShellRequestFromToolArgs(name, args)
-			decision := core.DecideShellRequest(config.ShellPolicy, req)
-			if decision.Route == core.ShellRouteHostDirect {
-				dispatcher.Fire(ctx, hooks.PermissionRequest, hooks.PermissionPayload{ToolName: name, Args: args})
-				approved := make(chan bool, 1)
-				p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Approved: approved, ExecutionReason: decision.Reason})
-				select {
-				case result := <-approved:
-					return result
-				case <-ctx.Done():
-					return false
-				}
-			}
-
-			// Sandboxed commands auto-approve
-			if core.IsSandboxEnabled() {
-				p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Sandboxed: true})
-				return true
-			}
-			// Non-sandboxed requires approval
-			dispatcher.Fire(ctx, hooks.PermissionRequest, hooks.PermissionPayload{ToolName: name, Args: args})
-			approved := make(chan bool, 1)
-			p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Approved: approved})
-			select {
-			case result := <-approved:
-				return result
-			case <-ctx.Done():
-				return false
-			}
-		}
-
-		// Other tools require approval
-		dispatcher.Fire(ctx, hooks.PermissionRequest, hooks.PermissionPayload{ToolName: name, Args: args})
-		approved := make(chan bool, 1)
-		p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Approved: approved})
-
-		// Block until user approves (Enter) or rejects (Esc), or context cancelled
-		select {
-		case result := <-approved:
-			return result
-		case <-ctx.Done():
-			return false
-		}
-	}
-
-	agent.OnToolDone = func(name string, args map[string]any, result core.ToolResult) {
-		payload := hooks.ToolResultPayload{ToolName: name, Args: args, Status: result.Status, Success: result.Success}
-		if result.Success {
-			dispatcher.Fire(ctx, hooks.PostToolUse, payload)
-		} else {
-			dispatcher.Fire(ctx, hooks.PostToolUseFailure, payload)
-		}
-
-		sandboxed := false
-		if result.ExecMeta != nil {
-			sandboxed = result.ExecMeta.Sandboxed
-		}
-		p.Send(tui.AgentToolDoneMsg{Name: name, Args: args, Status: result.Status, Sandboxed: sandboxed})
-
-		if name != "write_file" && name != "edit_file" {
-			return
-		}
-		if !result.Success {
-			originalPath, _ := args["path"].(string)
-			changeBatchMgr.DiscardChange(name, originalPath)
-			return
-		}
-
-		originalPath, _ := args["path"].(string)
-		_, ok, err := changeBatchMgr.CompleteChange(name, originalPath)
-		if err != nil {
-			p.Send(tui.AgentErrorMsg{Err: fmt.Errorf("record final change for %s: %w", originalPath, err)})
-			return
-		}
-		if !ok {
-			return
-		}
-	}
-
-	agent.OnMessage = func(content string) {
-		p.Send(tui.AgentMessageMsg(content))
-	}
-
-	agent.OnContentDelta = func(delta string) {
-		p.Send(tui.AgentContentDeltaMsg(delta))
-	}
-
-	agent.OnReasoningDelta = func(delta string) {
-		p.Send(tui.AgentReasoningDeltaMsg(delta))
-	}
-
-	agent.OnPreTaskStart = func(name string) {
-		p.Send(tui.AgentPreTaskStartMsg(name))
-	}
-
-	agent.OnPreTaskEnd = func(name string) {
-		p.Send(tui.AgentPreTaskEndMsg(name))
-	}
-
-	agent.OnContextUsage = func(pct float64, totalCost float64) {
-		p.Send(tui.AgentContextUsageMsg{Pct: pct, TotalCost: totalCost})
-	}
-
-	agent.OnResponseModel = func(model string) {
-		p.Send(tui.AgentResponseModelMsg{ModelID: model})
-	}
-
-	agent.OnSandboxFallback = func(command string, reason string) bool {
-		approved := make(chan bool, 1)
-		p.Send(tui.AgentSandboxFallbackMsg{
-			Command:  command,
-			Reason:   reason,
-			Approved: approved,
-		})
-
-		// Block until user approves (Enter) or rejects (Esc), or context cancelled
-		select {
-		case result := <-approved:
-			return result
-		case <-ctx.Done():
-			return false
-		}
-	}
-
-	// Fire SessionStart before running TUI
 	dispatcher.Fire(ctx, hooks.SessionStart, hooks.SessionStartPayload{})
+	defer dispatcher.Fire(ctx, hooks.SessionEnd, hooks.SessionEndPayload{})
 
-	// Run the TUI
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("Error running TUI: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Fire SessionEnd after TUI exits
-	dispatcher.Fire(ctx, hooks.SessionEnd, hooks.SessionEndPayload{})
-}
-
-// newChangeBatchReviewHandler returns a Stop hook handler that shows accumulated
-// write/edit diffs and asks for one batch decision after the agentic loop completes.
-func newChangeBatchReviewHandler(mgr changebatch.BatchTracker, p *tea.Program) hooks.Handler {
-	return hooks.HandlerFunc(func(ctx context.Context, _ hooks.Event, _ any) {
-		completed := mgr.DrainCompleted()
-		if len(completed) == 0 {
-			return
-		}
-		for _, change := range completed {
-			p.Send(tui.AgentDiffPreviewMsg{
-				RelPath:    change.DisplayPath,
-				OldContent: change.BeforeContent,
-				NewContent: change.AfterContent,
-			})
-		}
-		approved := make(chan bool, 1)
-		p.Send(tui.AgentChangeBatchApprovalMsg{
-			Count:    len(completed),
-			Approved: approved,
-		})
-		select {
-		case ok := <-approved:
-			if !ok {
-				if err := mgr.UndoBatch(completed); err != nil {
-					p.Send(tui.AgentErrorMsg{Err: err})
-				}
-			}
-			p.Send(tui.GitStatusMsg{Status: tui.FetchGitStatus()})
-		case <-ctx.Done():
-			return
-		}
-	})
+	_, err := p.Run()
+	return err
 }
 
 func envOr(key, fallback string) string {
