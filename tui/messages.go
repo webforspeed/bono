@@ -5,10 +5,11 @@ type AgentMessageMsg string
 
 // AgentToolCallMsg is sent when the agent wants to call a tool.
 type AgentToolCallMsg struct {
-	Name      string
-	Args      map[string]any
-	Approved  chan bool // nil for auto-approved tools, otherwise TUI sends approval here
-	Sandboxed bool      // true if running in sandbox (shell/python)
+	Name            string
+	Args            map[string]any
+	Approved        chan bool // nil for auto-approved tools, otherwise TUI sends approval here
+	Sandboxed       bool      // true if running in sandbox (shell/python)
+	ExecutionReason string    // optional reason for special execution routing/approval
 }
 
 // AgentToolDoneMsg is sent when a tool call completes.
@@ -31,7 +32,7 @@ type AgentDiffApprovalMsg struct {
 	RelPath  string
 	Index    int       // 1-based position in batch (0 = not part of batch)
 	Total    int       // total diffs in batch (0 = not part of batch)
-	Approved chan bool  // TUI sends approval here (Enter=true, Esc=false)
+	Approved chan bool // TUI sends approval here (Enter=true, Esc=false)
 }
 
 // AgentPreTaskStartMsg is sent when a pre-task agent starts.
