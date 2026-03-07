@@ -236,6 +236,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Sandboxed shell execution - auto-approved
 			displayStr = fmt.Sprintf("● %s [Running in sandbox]", prompt)
 			m.spinnerBar.SetText("Running in sandbox...")
+		} else if msg.Approved != nil && msg.ExecutionReason != "" {
+			displayStr = fmt.Sprintf("● %s [Outside sandbox: %s] [Enter/Esc]", prompt, msg.ExecutionReason)
+			m.pendingApproval = &msg
+			m.spinnerBar.SetText("Waiting for host execution approval...")
 		} else if msg.Approved == nil {
 			// Auto-approved (e.g., read_file) - just show it
 			displayStr = fmt.Sprintf("● %s", prompt)

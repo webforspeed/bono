@@ -85,6 +85,9 @@ func main() {
 		Model:        model,
 		SystemPrompt: systemPrompt,
 		HTTPTimeout:  120 * time.Second,
+		Sandbox: core.SandboxConfig{
+			CommandTimeout: 30 * time.Second,
+		},
 		CodeSearch: &core.CodeSearchConfig{
 			DBPath: ".bono/index.db",
 			Model:  os.Getenv("EMBEDDING_MODEL"),
@@ -95,9 +98,15 @@ func main() {
 			SearchEngine: envOr("WEB_SEARCH_ENGINE", "exa"),
 		},
 	}
+	config.ShellPolicy = core.DefaultShellPolicy()
 	if n := os.Getenv("API_TIMEOUT_SEC"); n != "" {
 		if v, err := strconv.Atoi(n); err == nil && v > 0 {
 			config.HTTPTimeout = time.Duration(v) * time.Second
+		}
+	}
+	if n := os.Getenv("SHELL_TIMEOUT_SEC"); n != "" {
+		if v, err := strconv.Atoi(n); err == nil && v > 0 {
+			config.Sandbox.CommandTimeout = time.Duration(v) * time.Second
 		}
 	}
 	if n := os.Getenv("MAX_TOOL_CALLS_PER_TURN"); n != "" {
@@ -265,6 +274,20 @@ func main() {
 		}
 
 		if name == "run_shell" || name == "python_runtime" {
+			req := core.ShellRequestFromToolArgs(name, args)
+			decision := core.DecideShellRequest(config.ShellPolicy, req)
+			if decision.Route == core.ShellRouteHostDirect {
+				dispatcher.Fire(ctx, hooks.PermissionRequest, hooks.PermissionPayload{ToolName: name, Args: args})
+				approved := make(chan bool, 1)
+				p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Approved: approved, ExecutionReason: decision.Reason})
+				select {
+				case result := <-approved:
+					return result
+				case <-ctx.Done():
+					return false
+				}
+			}
+
 			// Sandboxed commands auto-approve
 			if core.IsSandboxEnabled() {
 				p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Sandboxed: true})

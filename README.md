@@ -79,6 +79,7 @@ go run .
 
 ## Notes
 - `OPENROUTER_API_KEY` is required.
+- Set `SHELL_TIMEOUT_SEC` to change the default timeout for `run_shell` and `python_runtime` commands.
 - Bono status footer shows build mode/version: `Bono (dev)` for local builds and `Bono vX.Y.Z` for release builds.
 - Bono checks GitHub releases in the background and shows `new version available` in the footer for newer tags.
 - Set `BONO_DISABLE_UPDATE_CHECK=1` to skip update checks.
