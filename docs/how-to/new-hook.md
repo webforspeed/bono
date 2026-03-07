@@ -65,7 +65,7 @@ Build both repos. Run bono, trigger the event, and check `logs/bono.jsonl` for t
 | Agent loop (tool calls, responses) | `main.go` via bono-core callback | `PreToolUse`, `PostToolUse` |
 | User interaction (input, navigation) | `tui/model.go` | `UserPromptSubmit` |
 | Program lifecycle (start, exit) | `main.go` | `SessionStart`, `SessionEnd` |
-| Infrastructure (worktree, indexing) | `main.go` or relevant manager | `WorktreeCreate` |
+| Infrastructure (indexing, batch review) | `main.go` or relevant manager | `Stop` |
 
 ## Constraints
 

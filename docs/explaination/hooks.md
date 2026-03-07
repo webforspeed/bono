@@ -52,7 +52,6 @@ Program start
   │   ├─ [for each tool call]
   │   │   ├─ PreToolUse
   │   │   ├─ PermissionRequest          [only if tool needs approval]
-  │   │   ├─ WorktreeCreate             [first write/edit that creates a session]
   │   │   └─ PostToolUse / PostToolUseFailure
   │   │
   │   └─ Stop                           [agent.Chat returns]
@@ -62,7 +61,7 @@ Program start
   └─ SessionEnd
 ```
 
-Events that fire once per session: `SessionStart`, `SessionEnd`, `WorktreeCreate`.
+Events that fire once per session: `SessionStart`, `SessionEnd`.
 Events that fire per prompt: `UserPromptSubmit`, `Stop`.
 Events that fire per tool call: `PreToolUse`, `PostToolUse`/`PostToolUseFailure`, `PermissionRequest`.
 

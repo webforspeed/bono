@@ -50,15 +50,15 @@ type Model struct {
 	// Tool approval state
 	pendingApproval        *AgentToolCallMsg        // current tool awaiting Enter/Esc
 	pendingSandboxFallback *AgentSandboxFallbackMsg // sandbox fallback awaiting Enter/Esc
-	pendingDiffApproval    *AgentDiffApprovalMsg    // diff approval awaiting Enter/Esc
+	pendingBatchApproval   *AgentChangeBatchApprovalMsg
 
 	// Diff viewer state
-	diffViewer       DiffViewer
-	diffActive       bool // true when diff is pending approval (for Tab key handling)
-	diffMessageIndex int  // index in m.messages where the inline diff is rendered
+	diffViewer   DiffViewer
+	diffActive   bool // true when batch review is awaiting approval (for Tab key handling)
+	diffPreviews []diffPreviewBlock
 
 	// Lifecycle callbacks
-	onSessionClear func() // called on /clear to clean up worktrees etc.
+	onSessionClear func() // called on /clear to reset per-session state.
 
 	// Code search watcher metadata
 	watcher *FileWatcher
@@ -67,6 +67,11 @@ type Model struct {
 	streamingContent   string // accumulates content deltas
 	streamingReasoning string // accumulates reasoning deltas
 	isStreaming        bool   // true while streaming response in progress
+}
+
+type diffPreviewBlock struct {
+	messageIndex int
+	preview      AgentDiffPreviewMsg
 }
 
 // New creates a new TUI Model with the given agent and context.
@@ -243,6 +248,7 @@ func (m *Model) recalculateLayout() {
 // ClearMessages clears all messages from the viewport.
 func (m *Model) ClearMessages() {
 	m.messages = []string{}
+	m.diffPreviews = nil
 	m.viewport.SetContent("")
 }
 
@@ -327,7 +333,7 @@ func (m *Model) SetDispatcher(d *hooks.Dispatcher) {
 	m.dispatcher = d
 }
 
-// SetOnSessionClear sets a callback invoked during /clear for cleanup (e.g. worktrees).
+// SetOnSessionClear sets a callback invoked during /clear for session cleanup.
 func (m *Model) SetOnSessionClear(fn func()) {
 	m.onSessionClear = fn
 }

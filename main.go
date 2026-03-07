@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -16,8 +15,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	core "github.com/webforspeed/bono-core"
 	"github.com/webforspeed/bono/hooks"
+	"github.com/webforspeed/bono/internal/changebatch"
 	"github.com/webforspeed/bono/internal/logging"
-	"github.com/webforspeed/bono/internal/worktree"
 	"github.com/webforspeed/bono/prompts"
 	"github.com/webforspeed/bono/tui"
 )
@@ -155,8 +154,6 @@ func main() {
 		dispatcher.On(hooks.PostToolUseFailure, logHandler)
 		dispatcher.On(hooks.PermissionRequest, logHandler)
 		dispatcher.On(hooks.Stop, logHandler)
-		dispatcher.On(hooks.WorktreeCreate, logHandler)
-		dispatcher.On(hooks.WorktreeRemove, logHandler)
 	}
 
 	// Create context
@@ -211,15 +208,13 @@ func main() {
 	}
 
 	// Set up agent hooks to send messages to TUI
-	worktreeMgr := worktree.NewManager()
+	var changeBatchMgr changebatch.BatchTracker = changebatch.NewManager()
 
-	// Register batch diff approval on Stop hook (fires after agent.Chat returns).
-	dispatcher.On(hooks.Stop, newDiffApprovalHandler(worktreeMgr, p))
+	// Register batch review on Stop hook (fires after agent.Chat returns).
+	dispatcher.On(hooks.Stop, newChangeBatchReviewHandler(changeBatchMgr, p))
 
-	worktreeCreatedFor := map[string]bool{} // track per-repo worktree creation for hook firing
 	tuiModel.SetOnSessionClear(func() {
-		worktreeMgr.RemoveAllSessions(ctx)
-		worktreeCreatedFor = map[string]bool{}
+		changeBatchMgr.Reset()
 	})
 	agent.OnToolCall = func(name string, args map[string]any) bool {
 		dispatcher.Fire(ctx, hooks.PreToolUse, hooks.ToolPayload{ToolName: name, Args: args})
@@ -232,45 +227,12 @@ func main() {
 
 		if name == "write_file" || name == "edit_file" {
 			originalPath, _ := args["path"].(string)
-			session, err := worktreeMgr.EnsureSession(ctx, cwd, originalPath)
-			if err == nil {
-				if !worktreeCreatedFor[session.RepoRoot] {
-					worktreeCreatedFor[session.RepoRoot] = true
-					dispatcher.Fire(ctx, hooks.WorktreeCreate, hooks.WorktreePayload{Path: session.WorktreeRoot})
-				}
-				relPath, rewrittenAbs, err := worktreeMgr.RewritePathForWorktree(session, originalPath)
-				if err == nil {
-					beforeContent, wasNewFile, readErr := worktree.ReadFileOrEmpty(filepath.Join(session.RepoRoot, filepath.FromSlash(relPath)))
-					if readErr == nil {
-						// Sync working tree content to worktree on first access.
-						// git worktree checks out at HEAD; uncommitted changes would be
-						// missing, causing edit_file to fail with "string not found".
-						worktreeMgr.SyncToWorktree(session, relPath, wasNewFile)
-						args["path"] = rewrittenAbs
-						worktreeMgr.RegisterRewrite(worktree.PathRewrite{
-							ToolName:      name,
-							OriginalPath:  originalPath,
-							RelPath:       relPath,
-							RewrittenAbs:  rewrittenAbs,
-							WasNewFile:    wasNewFile,
-							BeforeContent: beforeContent,
-							RepoRoot:      session.RepoRoot,
-						})
-						p.Send(tui.AgentToolCallMsg{Name: name, Args: args})
-						return true
-					}
-				}
-			}
-			// Fallback to existing approval behavior if worktree orchestration fails.
-			dispatcher.Fire(ctx, hooks.PermissionRequest, hooks.PermissionPayload{ToolName: name, Args: args})
-			approved := make(chan bool, 1)
-			p.Send(tui.AgentToolCallMsg{Name: name, Args: args, Approved: approved})
-			select {
-			case result := <-approved:
-				return result
-			case <-ctx.Done():
+			if _, err := changeBatchMgr.BeginChange(cwd, name, originalPath); err != nil {
+				p.Send(tui.AgentErrorMsg{Err: fmt.Errorf("track %s change: %w", originalPath, err)})
 				return false
 			}
+			p.Send(tui.AgentToolCallMsg{Name: name, Args: args})
+			return true
 		}
 
 		if name == "run_shell" || name == "python_runtime" {
@@ -333,25 +295,24 @@ func main() {
 		}
 		p.Send(tui.AgentToolDoneMsg{Name: name, Args: args, Status: result.Status, Sandboxed: sandboxed})
 
-		if !result.Success || (name != "write_file" && name != "edit_file") {
+		if name != "write_file" && name != "edit_file" {
+			return
+		}
+		if !result.Success {
+			originalPath, _ := args["path"].(string)
+			changeBatchMgr.DiscardChange(name, originalPath)
 			return
 		}
 
-		rewrittenAbs, _ := args["path"].(string)
-		meta, ok := worktreeMgr.ConsumeRewrite(name, rewrittenAbs)
+		originalPath, _ := args["path"].(string)
+		_, ok, err := changeBatchMgr.CompleteChange(name, originalPath)
+		if err != nil {
+			p.Send(tui.AgentErrorMsg{Err: fmt.Errorf("record final change for %s: %w", originalPath, err)})
+			return
+		}
 		if !ok {
 			return
 		}
-
-		afterContent, _, err := worktree.ReadFileOrEmpty(meta.RewrittenAbs)
-		if err != nil {
-			p.Send(tui.AgentErrorMsg{Err: fmt.Errorf("read post-write content for diff: %w", err)})
-			return
-		}
-
-		// Record for batch approval after the loop completes (Stop hook).
-		meta.AfterContent = afterContent
-		worktreeMgr.RecordCompleted(meta)
 	}
 
 	agent.OnMessage = func(content string) {
@@ -408,44 +369,40 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Clean up worktrees before exiting
-	worktreeMgr.RemoveAllSessions(ctx)
-
 	// Fire SessionEnd after TUI exits
 	dispatcher.Fire(ctx, hooks.SessionEnd, hooks.SessionEndPayload{})
 }
 
-// newDiffApprovalHandler returns a Stop hook handler that shows accumulated
-// write/edit diffs for batch approval after the agentic loop completes.
-func newDiffApprovalHandler(mgr *worktree.Manager, p *tea.Program) hooks.Handler {
+// newChangeBatchReviewHandler returns a Stop hook handler that shows accumulated
+// write/edit diffs and asks for one batch decision after the agentic loop completes.
+func newChangeBatchReviewHandler(mgr changebatch.BatchTracker, p *tea.Program) hooks.Handler {
 	return hooks.HandlerFunc(func(ctx context.Context, _ hooks.Event, _ any) {
 		completed := mgr.DrainCompleted()
 		if len(completed) == 0 {
 			return
 		}
-		for i, cr := range completed {
+		for _, change := range completed {
 			p.Send(tui.AgentDiffPreviewMsg{
-				RelPath:    cr.RelPath,
-				OldContent: cr.BeforeContent,
-				NewContent: cr.AfterContent,
+				RelPath:    change.DisplayPath,
+				OldContent: change.BeforeContent,
+				NewContent: change.AfterContent,
 			})
-			approved := make(chan bool, 1)
-			p.Send(tui.AgentDiffApprovalMsg{
-				RelPath:  cr.RelPath,
-				Index:    i + 1,
-				Total:    len(completed),
-				Approved: approved,
-			})
-			select {
-			case ok := <-approved:
-				if ok {
-					if err := worktree.PromoteRewrite(cr, cr.RepoRoot); err != nil {
-						p.Send(tui.AgentErrorMsg{Err: fmt.Errorf("promote %s: %w", cr.RelPath, err)})
-					}
+		}
+		approved := make(chan bool, 1)
+		p.Send(tui.AgentChangeBatchApprovalMsg{
+			Count:    len(completed),
+			Approved: approved,
+		})
+		select {
+		case ok := <-approved:
+			if !ok {
+				if err := mgr.UndoBatch(completed); err != nil {
+					p.Send(tui.AgentErrorMsg{Err: err})
 				}
-			case <-ctx.Done():
-				return
 			}
+			p.Send(tui.GitStatusMsg{Status: tui.FetchGitStatus()})
+		case <-ctx.Done():
+			return
 		}
 	})
 }

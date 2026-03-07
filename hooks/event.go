@@ -12,8 +12,6 @@ const (
 	PostToolUseFailure Event = "PostToolUseFailure"
 	PermissionRequest  Event = "PermissionRequest"
 	Stop               Event = "Stop"
-	WorktreeCreate     Event = "WorktreeCreate"
-	WorktreeRemove     Event = "WorktreeRemove"
 )
 
 // Payload structs — one per event that carries data.
@@ -47,8 +45,4 @@ type PermissionPayload struct {
 type StopPayload struct {
 	Response string
 	Err      error
-}
-
-type WorktreePayload struct {
-	Path string
 }
