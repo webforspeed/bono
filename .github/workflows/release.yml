@@ -72,11 +72,17 @@ jobs:
           merge-multiple: true
           path: dist
 
-      - name: Generate checksums
+      - name: Generate and sign checksums
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: |
           set -euo pipefail
           cd dist
           sha256sum *.tar.gz > checksums.txt
+          echo "$RELEASE_SIGNING_KEY" > /tmp/signing.key
+          openssl pkeyutl -sign -inkey /tmp/signing.key \
+            -rawin -in checksums.txt -out checksums.txt.sig
+          rm -f /tmp/signing.key
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@db473fddc028af60658334401dc6fa3ffd8669fd # v2.3.0
@@ -89,4 +95,5 @@ jobs:
           files: |
             dist/*.tar.gz
             dist/checksums.txt
+            dist/checksums.txt.sig
           generate_release_notes: true

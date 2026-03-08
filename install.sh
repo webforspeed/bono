@@ -4,8 +4,14 @@ set -euo pipefail
 BINARY_NAME="bono"
 REPO="webforspeed/bono"
 BINDIR="$HOME/.local/bin"
+CONFDIR="$HOME/.config/bono"
+PINNED_KEY_PATH="$HOME/.config/bono/release.pub"
 TAG_PATTERN='^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$'
 REQUESTED_TAG=""
+
+RELEASE_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAjGzxQr9wRdwcQbdvGeiLnup5xlYsEHkRisjHDZarWDU=
+-----END PUBLIC KEY-----"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -122,6 +128,7 @@ main() {
   require_cmd tar
   require_cmd install
   require_cmd awk
+  require_cmd openssl
 
   local os arch tag version artifact_name base_url tmpdir archive_path checksums_path expected actual extracted_bin
   os="$(detect_os)"
@@ -144,6 +151,23 @@ main() {
   echo "Installing ${BINARY_NAME} ${tag} for ${os}/${arch} from ${REPO}..."
   curl -fsSL "${base_url}/${artifact_name}" -o "$archive_path"
   curl -fsSL "${base_url}/checksums.txt" -o "$checksums_path"
+  curl -fsSL "${base_url}/checksums.txt.sig" -o "${checksums_path}.sig"
+
+  # TOFU key pinning: first install saves the key, subsequent installs reject key changes
+  echo "$RELEASE_PUBLIC_KEY" > "${tmpdir}/release.pub"
+  if [[ -f "$PINNED_KEY_PATH" ]]; then
+    if ! diff -q "$PINNED_KEY_PATH" "${tmpdir}/release.pub" >/dev/null 2>&1; then
+      echo "error: public key mismatch — the install script's key differs from the pinned key at ${PINNED_KEY_PATH}" >&2
+      echo "If this is a legitimate key rotation, remove ${PINNED_KEY_PATH} and re-run." >&2
+      exit 1
+    fi
+  fi
+
+  if ! openssl pkeyutl -verify -pubin -inkey "${tmpdir}/release.pub" \
+    -rawin -in "$checksums_path" -sigfile "${checksums_path}.sig" >/dev/null 2>&1; then
+    echo "error: signature verification failed for checksums.txt" >&2
+    exit 1
+  fi
 
   expected="$(awk -v name="$artifact_name" '$2 == name { print $1 }' "$checksums_path")"
   if [[ -z "$expected" ]]; then
@@ -166,6 +190,13 @@ main() {
 
   mkdir -p "$BINDIR"
   install -m 0755 "$extracted_bin" "${BINDIR}/${BINARY_NAME}"
+
+  # Pin the public key on first successful install
+  if [[ ! -f "$PINNED_KEY_PATH" ]]; then
+    mkdir -p "$CONFDIR"
+    cp "${tmpdir}/release.pub" "$PINNED_KEY_PATH"
+    chmod 600 "$PINNED_KEY_PATH"
+  fi
 
   echo "Installed to ${BINDIR}/${BINARY_NAME}"
   if [[ ":$PATH:" == *":${BINDIR}:"* ]]; then
