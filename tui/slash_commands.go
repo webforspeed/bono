@@ -61,12 +61,13 @@ func handleInit(m *Model, arg string) tea.Cmd {
 }
 
 func handlePlan(m *Model, arg string) tea.Cmd {
-	m.AppendRawMessage("● /plan")
 	if strings.TrimSpace(arg) == "" {
+		m.AppendRawMessage("● /plan")
 		m.AppendRawMessage("  ↳ Usage: /plan <task description>")
 		m.input.Reset()
 		return nil
 	}
+	m.AppendRawMessage(fmt.Sprintf("● /plan %s", arg))
 	m.AppendRawMessage("  ↳ Starting planning subagent...")
 	return m.runSubAgent("plan", arg)
 }

@@ -155,10 +155,15 @@ func (m *Model) AppendRawMessage(content string) {
 }
 
 // updateViewportContent updates the viewport with the current messages.
+// Only auto-scrolls to the bottom if the user was already at the bottom,
+// so manual scroll position is preserved.
 func (m *Model) updateViewportContent() {
+	atBottom := m.viewport.AtBottom()
 	content := strings.Join(m.messages, "\n")
 	m.viewport.SetContent(content)
-	m.viewport.GotoBottom()
+	if atBottom {
+		m.viewport.GotoBottom()
+	}
 }
 
 // renderReasoning wraps and styles reasoning text to fit the viewport.

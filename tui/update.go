@@ -309,7 +309,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case SubAgentStartMsg:
-		// Parent/child lines already appended by the slash command handler.
+		m.sidebar.SetCurrentMode(string(msg))
+		m.recalculateLayout()
 
 	case SubAgentEndMsg:
 		// Lifecycle event — completion handled by SubAgentDoneMsg.
@@ -317,6 +318,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SubAgentDoneMsg:
 		m.processing = false
 		m.spinnerBar.SetActive(false)
+		m.sidebar.SetCurrentMode("")
+		m.recalculateLayout()
 		if msg.Err != nil {
 			m.AppendRawMessage(fmt.Sprintf("  ↳ Failed: %v", msg.Err))
 		}
