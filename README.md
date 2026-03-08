@@ -5,6 +5,16 @@ A terminal coding agent frontend written in Go. Bono provides the fullscreen TUI
 ## Screenshot
 ![bono screenshot](./docs/assets/screenshot_2.png)
 
+## Slash Commands
+
+| Command | Description |
+|---------|-------------|
+| `/index` | Index codebase for semantic code search |
+| `/plan` | Launch a planning subagent with its own context window to think through architecture and approach |
+| `/reasoning` | Set reasoning effort (`minimal`, `low`, `medium`, `high`, `xhigh`) |
+| `/model` | Switch LLM at runtime |
+| `/clear` | Clear conversation history and reset cost/context meter |
+
 ## Features
 - **Modes:** Fullscreen TUI by default, plus headless prompt mode via `bono -p "..."` / `bono --prompt "..."`.
 - **Slash:** Slash-command-first UX (`/init`, `/index`, `/model`, `/spinner`, `/clear`, `/help`, `/exit`)
@@ -19,6 +29,7 @@ A terminal coding agent frontend written in Go. Bono provides the fullscreen TUI
 - **Reasoning:** Configurable reasoning effort via `/reasoning` — supports `minimal`, `low`, `medium`, `high`, and `xhigh` levels.
 - **Streaming:** Live token-by-token response streaming with real-time reasoning and content deltas
 - **Web:** Live web access via `WebSearch` (search mode returns ranked URLs, answer mode returns a synthesized answer with citations) and `WebFetch` (reads and summarizes a URL). Auto-routes between modes using a fast LLM classifier; model can override with `mode="search"` or `mode="answer"`
+- **Planning:** Dedicated planning subagent mode (`/plan`) for thinking through architecture and breaking down tasks before writing code
 
 ## Tools
 - `read_file`: read file contents
@@ -79,16 +90,6 @@ Installed binary usage:
 ```bash
 bono -p "Find and fix the bug in auth.py"
 ```
-
-## Slash Commands
-- `/init`: run exploring agent
-- `/index`: index codebase for semantic search
-- `/help`: show commands
-- `/clear`: clear chat history and reset cost/context meter
-- `/model`: open model selector
-- `/reasoning`: open reasoning effort picker (or set directly: `/reasoning high`, `/reasoning none`)
-- `/spinner`: cycle spinner style (or set explicit type)
-- `/exit`: exit Bono
 
 ## Notes
 - `OPENROUTER_API_KEY` is required.
