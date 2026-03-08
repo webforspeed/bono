@@ -127,7 +127,7 @@ main() {
     exit 1
   fi
 
-  tar -xzf "$archive_path" -C "$tmpdir"
+  tar --no-same-owner --no-same-permissions -xzf "$archive_path" -C "$tmpdir"
   extracted_bin="${tmpdir}/${BINARY_NAME}"
   if [[ ! -f "$extracted_bin" ]]; then
     echo "error: extracted archive does not contain ${BINARY_NAME}" >&2
