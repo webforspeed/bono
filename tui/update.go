@@ -308,6 +308,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.AppendRawMessage(fmt.Sprintf("Error: %v", msg.Err))
 		}
 
+	case SubAgentStartMsg:
+		// Parent/child lines already appended by the slash command handler.
+
+	case SubAgentEndMsg:
+		// Lifecycle event — completion handled by SubAgentDoneMsg.
+
+	case SubAgentDoneMsg:
+		m.processing = false
+		m.spinnerBar.SetActive(false)
+		if msg.Err != nil {
+			m.AppendRawMessage(fmt.Sprintf("  ↳ Failed: %v", msg.Err))
+		}
+
 	case AgentSandboxFallbackMsg:
 		// Sandbox blocked a command - request approval for unsandboxed execution
 		wrapWidth := m.mainWidth() - 2

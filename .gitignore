@@ -18,6 +18,10 @@ go.work
 # IDE
 .idea/
 .vscode/
+.claude/
+.cursor/
+.codex/
+.opencode/
 *.swp
 *.swo
 

@@ -72,6 +72,12 @@ func (f *HeadlessFrontend) HandleEvent(_ context.Context, event Event) {
 	case PreTaskEndEvent:
 		f.finishStreaming()
 		fmt.Fprintf(f.out, "● Completed %s agent\n", event.Name)
+	case SubAgentStartEvent:
+		f.finishStreaming()
+		fmt.Fprintf(f.out, "● Running %s agent...\n", event.Name)
+	case SubAgentEndEvent:
+		f.finishStreaming()
+		fmt.Fprintf(f.out, "● Completed %s agent\n", event.Name)
 	case ErrorEvent:
 		f.finishStreaming()
 		if event.Err != nil {

@@ -137,6 +137,12 @@ func (s *Session) Bind(ctx context.Context) {
 	s.agent.OnPreTaskEnd = func(name string) {
 		s.frontend.HandleEvent(ctx, PreTaskEndEvent{Name: name})
 	}
+	s.agent.OnSubAgentStart = func(name string) {
+		s.frontend.HandleEvent(ctx, SubAgentStartEvent{Name: name})
+	}
+	s.agent.OnSubAgentEnd = func(name string) {
+		s.frontend.HandleEvent(ctx, SubAgentEndEvent{Name: name})
+	}
 	s.agent.OnContextUsage = func(pct float64, totalCost float64) {
 		s.frontend.HandleEvent(ctx, ContextUsageEvent{Pct: pct, TotalCost: totalCost})
 	}
