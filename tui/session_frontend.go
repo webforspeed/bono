@@ -43,6 +43,10 @@ func (f *SessionFrontend) HandleEvent(_ context.Context, event session.Event) {
 		f.program.Send(AgentPreTaskStartMsg(event.Name))
 	case session.PreTaskEndEvent:
 		f.program.Send(AgentPreTaskEndMsg(event.Name))
+	case session.SubAgentStartEvent:
+		f.program.Send(SubAgentStartMsg(event.Name))
+	case session.SubAgentEndEvent:
+		f.program.Send(SubAgentEndMsg(event.Name))
 	case session.ErrorEvent:
 		f.program.Send(AgentErrorMsg{Err: event.Err})
 	case session.ContextUsageEvent:

@@ -1,5 +1,7 @@
 # How to Create a New Slash Command
 
+**Note:** If your slash command runs a subagent (a separate agent with its own system prompt and tool restrictions), see [How to add a new subagent slash command](./new-subagent-slash-command.md) instead.
+
 ## Where Things Live
 
 Slash commands are a TUI concern in this repo.

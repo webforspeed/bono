@@ -86,6 +86,18 @@ type ResponseModelEvent struct {
 
 func (ResponseModelEvent) isSessionEvent() {}
 
+type SubAgentStartEvent struct {
+	Name string
+}
+
+func (SubAgentStartEvent) isSessionEvent() {}
+
+type SubAgentEndEvent struct {
+	Name string
+}
+
+func (SubAgentEndEvent) isSessionEvent() {}
+
 type RefreshGitStatusEvent struct{}
 
 func (RefreshGitStatusEvent) isSessionEvent() {}

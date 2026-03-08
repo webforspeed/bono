@@ -16,6 +16,7 @@ type SlashCommandSpec struct {
 
 const helpText = `Available commands:
   /init              - Run exploring agent
+  /plan <task>       - Plan a task before implementing
   /index             - Index codebase for semantic code search
   /help              - Show this help
   /clear             - Clear chat history
@@ -28,6 +29,7 @@ const helpText = `Available commands:
 func DefaultSlashCommandSpecs() []SlashCommandSpec {
 	return []SlashCommandSpec{
 		{Name: "init", Description: "Run exploring agent", Handler: handleInit},
+		{Name: "plan", Description: "Plan a task before implementing", Handler: handlePlan},
 		{Name: "index", Description: "Index codebase for semantic search", Handler: handleIndex},
 		{Name: "help", Description: "Show available commands", Handler: handleHelp},
 		{Name: "clear", Description: "Clear the chat history", Handler: handleClear},
@@ -56,6 +58,48 @@ func slashCommandIndex(specs []SlashCommandSpec) map[string]SlashCommandSpec {
 
 func handleInit(m *Model, arg string) tea.Cmd {
 	return m.runExploringPreTask()
+}
+
+func handlePlan(m *Model, arg string) tea.Cmd {
+	if strings.TrimSpace(arg) == "" {
+		m.AppendRawMessage("● /plan")
+		m.AppendRawMessage("  ↳ Usage: /plan <task description>")
+		m.input.Reset()
+		return nil
+	}
+	m.AppendRawMessage(fmt.Sprintf("● /plan %s", arg))
+	m.AppendRawMessage("  ↳ Starting planning subagent...")
+	return m.runSubAgent("plan", arg)
+}
+
+// runSubAgent dispatches a subagent by name. Reusable for any subagent-backed slash command.
+func (m *Model) runSubAgent(name, input string) tea.Cmd {
+	if m.processing {
+		return nil
+	}
+
+	sa, ok := m.agent.SubAgent(name)
+	if !ok {
+		m.AppendRawMessage(fmt.Sprintf("  ↳ Unknown subagent: %s", name))
+		m.input.Reset()
+		return nil
+	}
+
+	m.input.Reset()
+	m.processing = true
+	m.spinnerBar.SetText(fmt.Sprintf("Running %s agent...", name))
+	m.spinnerBar.SetActive(true)
+
+	agent := m.agent
+	ctx := m.ctx
+	saName := sa.Name()
+	return tea.Batch(
+		m.spinnerBar.Tick(),
+		func() tea.Msg {
+			_, err := agent.RunSubAgent(ctx, sa, input)
+			return SubAgentDoneMsg{Name: saName, Err: err}
+		},
+	)
 }
 
 func handleHelp(m *Model, arg string) tea.Cmd {

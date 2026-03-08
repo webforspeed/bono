@@ -40,6 +40,7 @@ type Sidebar struct {
 	changedFiles     int // files changed since last index
 	indexReady       bool
 	reasoningEffort  string // current reasoning effort value (e.g. "high", "" = disabled)
+	currentMode      string // "plan" when plan subagent is active, "" = normal
 	git              GitStatus
 	width, height    int
 }
@@ -57,6 +58,7 @@ func (s *Sidebar) SetWidth(w int)              { s.width = w }
 func (s *Sidebar) SetHeight(h int)             { s.height = h }
 func (s *Sidebar) SetGitStatus(g GitStatus)        { s.git = g }
 func (s *Sidebar) SetReasoningEffort(effort string) { s.reasoningEffort = effort }
+func (s *Sidebar) SetCurrentMode(mode string)        { s.currentMode = mode }
 
 // SetIndexStats updates the workspace index information.
 func (s *Sidebar) SetIndexStats(files int) {
@@ -141,6 +143,20 @@ func (s Sidebar) sections() []SidebarSection {
 		reasoning.Items = append(reasoning.Items, item)
 	}
 	sections = append(sections, reasoning)
+
+	// MODE
+	mode := SidebarSection{Header: "MODE"}
+	planItem := SidebarItem{Text: "Plan (/plan)"}
+	normalItem := SidebarItem{Text: "Normal"}
+	if s.currentMode == "plan" {
+		planItem.Color = lipgloss.Color("86")
+		normalItem.Color = lipgloss.Color("241")
+	} else {
+		planItem.Color = lipgloss.Color("241")
+		normalItem.Color = lipgloss.Color("86")
+	}
+	mode.Items = append(mode.Items, normalItem, planItem)
+	sections = append(sections, mode)
 
 	// CONTEXT
 	context := SidebarSection{Header: "CONTEXT (/clear)"}

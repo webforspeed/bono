@@ -44,6 +44,18 @@ type AgentPreTaskDoneMsg struct {
 	Err error
 }
 
+// SubAgentStartMsg is sent when a subagent begins execution.
+type SubAgentStartMsg string
+
+// SubAgentEndMsg is sent when a subagent completes execution.
+type SubAgentEndMsg string
+
+// SubAgentDoneMsg is sent when a subagent run completes (from slash command dispatch).
+type SubAgentDoneMsg struct {
+	Name string
+	Err  error
+}
+
 // AgentSandboxFallbackMsg is sent when sandbox blocks a command and fallback is requested.
 type AgentSandboxFallbackMsg struct {
 	Command  string

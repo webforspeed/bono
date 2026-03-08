@@ -12,6 +12,7 @@ All code changes related to hooks, terminal UX, session frontends, headless/TUI 
 - [How to create a new system prompt](./docs/how-to/new-system-prompt.md)
 - [How to create a new tool](./docs/how-to/new-tool.md)
 - [How to create a new slash command](./docs/how-to/new-slash-command.md)
+- [How to add a new subagent slash command](./docs/how-to/new-subagent-slash-command.md)
 - [How to add a new hook](./docs/how-to/new-hook.md)
 
 ### Reference
@@ -33,6 +34,7 @@ All code changes related to hooks, terminal UX, session frontends, headless/TUI 
 - [How semantic code search works](./docs/explaination/semantic-code-search.md)
 - [How web search works in Bono](./docs/explaination/web-search-tool.md)
 - [How hooks work in Bono](./docs/explaination/hooks.md)
+- [How subagents work in Bono](./docs/explaination/subagent-system.md)
 
 ## IMPORTANT RULES
 
