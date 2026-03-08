@@ -5,6 +5,7 @@ BINARY_NAME="bono"
 REPO="webforspeed/bono"
 BINDIR="$HOME/.local/bin"
 TAG_PATTERN='^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$'
+REQUESTED_TAG=""
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -92,7 +93,31 @@ cleanup_dir() {
   fi
 }
 
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --tag)
+        REQUESTED_TAG="${2:-}"
+        if [[ -z "$REQUESTED_TAG" ]]; then
+          echo "error: --tag requires a value (e.g. --tag v1.0.0)" >&2
+          exit 1
+        fi
+        if [[ ! "$REQUESTED_TAG" =~ $TAG_PATTERN ]]; then
+          echo "error: invalid tag format: ${REQUESTED_TAG}" >&2
+          exit 1
+        fi
+        shift 2
+        ;;
+      *)
+        echo "error: unknown argument: $1" >&2
+        exit 1
+        ;;
+    esac
+  done
+}
+
 main() {
+  parse_args "$@"
   require_cmd curl
   require_cmd tar
   require_cmd install
@@ -101,13 +126,18 @@ main() {
   local os arch tag version artifact_name base_url tmpdir archive_path checksums_path expected actual extracted_bin
   os="$(detect_os)"
   arch="$(detect_arch)"
-  tag="$(resolve_tag)"
+  if [[ -n "$REQUESTED_TAG" ]]; then
+    tag="$REQUESTED_TAG"
+  else
+    tag="$(resolve_tag)"
+  fi
   version="${tag#v}"
   artifact_name="${BINARY_NAME}_${version}_${os}_${arch}.tar.gz"
   base_url="https://github.com/${REPO}/releases/download/${tag}"
 
   tmpdir="$(mktemp -d)"
-  trap "cleanup_dir '$tmpdir'" EXIT
+  trap 'cleanup_dir "$tmpdir"' EXIT
+  chmod 700 "$tmpdir"
   archive_path="${tmpdir}/${artifact_name}"
   checksums_path="${tmpdir}/checksums.txt"
 

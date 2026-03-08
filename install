@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-curl -fsSL https://raw.githubusercontent.com/webforspeed/bono/main/install.sh | bash -s -- "$@"
+tmpscript="$(mktemp)"
+trap 'rm -f "$tmpscript"' EXIT
+
+curl -fsSL https://raw.githubusercontent.com/webforspeed/bono/main/install.sh -o "$tmpscript"
+bash "$tmpscript" "$@"
