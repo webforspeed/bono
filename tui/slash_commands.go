@@ -96,8 +96,9 @@ func (m *Model) runSubAgent(name, input string) tea.Cmd {
 	return tea.Batch(
 		m.spinnerBar.Tick(),
 		func() tea.Msg {
-			_, err := agent.RunSubAgent(ctx, sa, input)
-			return SubAgentDoneMsg{Name: saName, Err: err}
+			result, err := agent.RunSubAgent(ctx, sa, input)
+			approved := result != nil && result.Meta["approval"] == "approved"
+			return SubAgentDoneMsg{Name: saName, Err: err, Approved: approved}
 		},
 	)
 }

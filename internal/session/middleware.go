@@ -3,6 +3,8 @@ package session
 import (
 	"context"
 	"sync"
+
+	core "github.com/webforspeed/bono-core"
 )
 
 // Middleware decorates a frontend with cross-cutting behavior.
@@ -38,4 +40,10 @@ func (f *synchronizedFrontend) RequestApproval(ctx context.Context, req Approval
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.next.RequestApproval(ctx, req)
+}
+
+func (f *synchronizedFrontend) RequestSubAgentApproval(ctx context.Context, result core.SubAgentResult) core.SubAgentApprovalResponse {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.next.RequestSubAgentApproval(ctx, result)
 }

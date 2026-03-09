@@ -51,6 +51,7 @@ type Model struct {
 	pendingApproval        *AgentToolCallMsg        // current tool awaiting Enter/Esc
 	pendingSandboxFallback *AgentSandboxFallbackMsg // sandbox fallback awaiting Enter/Esc
 	pendingBatchApproval   *AgentChangeBatchApprovalMsg
+	pendingPlanApproval    *AgentPlanApprovalMsg // plan review awaiting Enter/Esc/feedback
 
 	// Diff viewer state
 	diffViewer   DiffViewer
