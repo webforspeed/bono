@@ -4,6 +4,7 @@ import (
 	"context"
 
 	tea "github.com/charmbracelet/bubbletea"
+	core "github.com/webforspeed/bono-core"
 	"github.com/webforspeed/bono/internal/session"
 )
 
@@ -96,4 +97,25 @@ func (f *SessionFrontend) RequestApproval(ctx context.Context, req session.Appro
 	case <-ctx.Done():
 		return false
 	}
+}
+
+func (f *SessionFrontend) RequestSubAgentApproval(_ context.Context, result core.SubAgentResult) core.SubAgentApprovalResponse {
+	ch := make(chan planApprovalResponse, 1)
+
+	f.program.Send(AgentPlanApprovalMsg{
+		OutputPath: result.Meta["output_path"],
+		Response:   ch,
+	})
+
+	resp := <-ch
+	var action core.SubAgentApprovalAction
+	switch resp.Action {
+	case 0:
+		action = core.SubAgentApprove
+	case 1:
+		action = core.SubAgentReject
+	case 2:
+		action = core.SubAgentRevise
+	}
+	return core.SubAgentApprovalResponse{Action: action, Feedback: resp.Feedback}
 }

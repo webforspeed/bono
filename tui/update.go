@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/webforspeed/bono/hooks"
 	"github.com/webforspeed/bono/internal/session"
 )
 
@@ -101,6 +102,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.spinnerBar.SetText("Thinking...")
 				return m, nil
 			}
+			// If pending plan approval: empty input = approve, text = revise
+			if m.pendingPlanApproval != nil {
+				feedback := strings.TrimSpace(m.input.Value())
+				msg := m.pendingPlanApproval
+				m.pendingPlanApproval = nil
+				m.input.Reset()
+				if feedback == "" {
+					// Approve
+					if len(m.messages) > 0 {
+						m.messages[len(m.messages)-1] = "  ↳ Plan approved — implementing..."
+						m.updateViewportContent()
+					}
+					msg.Response <- planApprovalResponse{Action: 0}
+					m.spinnerBar.SetText("Implementing plan...")
+				} else {
+					// Revise
+					if len(m.messages) > 0 {
+						m.messages[len(m.messages)-1] = fmt.Sprintf("  ↳ Revising plan: %s", feedback)
+						m.updateViewportContent()
+					}
+					msg.Response <- planApprovalResponse{Action: 2, Feedback: feedback}
+					m.spinnerBar.SetText("Revising plan...")
+					m.spinnerBar.SetActive(true)
+				}
+				return m, nil
+			}
 			// If slash modal is active and Enter is pressed, select the command
 			if m.slashModal.IsActive() {
 				if cmd := m.slashModal.SelectedCommand(); cmd != nil {
@@ -128,6 +155,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.pendingBatchApproval = nil
 				m.diffActive = false
 				m.diffPreviews = nil
+			}
+			if m.pendingPlanApproval != nil {
+				m.pendingPlanApproval.Response <- planApprovalResponse{Action: 1}
+				m.pendingPlanApproval = nil
 			}
 			return m, tea.Quit
 
@@ -167,6 +198,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.pendingBatchApproval = nil
 				m.diffActive = false
 				m.diffPreviews = nil
+				m.spinnerBar.SetText("Thinking...")
+				return m, nil
+			}
+			// If pending plan approval, reject it
+			if m.pendingPlanApproval != nil {
+				if len(m.messages) > 0 {
+					m.messages[len(m.messages)-1] = "  ↳ Plan skipped"
+					m.updateViewportContent()
+				}
+				m.pendingPlanApproval.Response <- planApprovalResponse{Action: 1}
+				m.pendingPlanApproval = nil
 				m.spinnerBar.SetText("Thinking...")
 				return m, nil
 			}
@@ -316,13 +358,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Lifecycle event — completion handled by SubAgentDoneMsg.
 
 	case SubAgentDoneMsg:
-		m.processing = false
-		m.spinnerBar.SetActive(false)
 		m.sidebar.SetCurrentMode("")
 		m.recalculateLayout()
 		if msg.Err != nil {
+			m.processing = false
+			m.spinnerBar.SetActive(false)
 			m.AppendRawMessage(fmt.Sprintf("  ↳ Failed: %v", msg.Err))
+		} else if msg.Approved {
+			// Plan approved — auto-trigger main agent to implement.
+			m.spinnerBar.SetText("Implementing plan...")
+			agent := m.agent
+			ctx := m.ctx
+			d := m.dispatcher
+			return m, tea.Batch(m.spinnerBar.Tick(), func() tea.Msg {
+				response, err := agent.Chat(ctx, "Implement the plan.")
+				if d != nil {
+					d.Fire(ctx, hooks.Stop, hooks.StopPayload{Response: response, Err: err})
+				}
+				return AgentResponseMsg{Response: response, Err: err}
+			})
+		} else {
+			m.processing = false
+			m.spinnerBar.SetActive(false)
 		}
+
+	case AgentPlanApprovalMsg:
+		wrapWidth := m.mainWidth() - 2
+		if wrapWidth < 40 {
+			wrapWidth = 40
+		}
+		wrapStyle := lipgloss.NewStyle().Width(wrapWidth)
+		if msg.OutputPath != "" {
+			m.AppendRawMessage(wrapStyle.Render(fmt.Sprintf("  ↳ Plan saved to %s", msg.OutputPath)))
+		}
+		m.AppendRawMessage(wrapStyle.Render("  ↳ Press Enter to implement, Esc to skip, or type feedback to revise [Enter/Esc]"))
+		m.pendingPlanApproval = &msg
+		m.spinnerBar.SetActive(false)
+		m.spinnerBar.SetText("Review plan — Enter to implement, Esc to skip")
 
 	case AgentSandboxFallbackMsg:
 		// Sandbox blocked a command - request approval for unsandboxed execution

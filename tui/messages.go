@@ -52,8 +52,9 @@ type SubAgentEndMsg string
 
 // SubAgentDoneMsg is sent when a subagent run completes (from slash command dispatch).
 type SubAgentDoneMsg struct {
-	Name string
-	Err  error
+	Name     string
+	Err      error
+	Approved bool // true if plan was approved — triggers auto-implementation
 }
 
 // AgentSandboxFallbackMsg is sent when sandbox blocks a command and fallback is requested.
@@ -61,6 +62,18 @@ type AgentSandboxFallbackMsg struct {
 	Command  string
 	Reason   string
 	Approved chan bool // TUI sends approval here
+}
+
+// AgentPlanApprovalMsg asks the user to approve, reject, or revise a subagent plan.
+type AgentPlanApprovalMsg struct {
+	OutputPath string
+	Response   chan planApprovalResponse // TUI sends response here
+}
+
+// planApprovalResponse carries the TUI's decision back to the agent goroutine.
+type planApprovalResponse struct {
+	Action   int    // 0=approve, 1=reject, 2=revise (maps to core.SubAgentApproval*)
+	Feedback string // non-empty when Action == 2
 }
 
 // AgentErrorMsg is sent when an error occurs during agent processing.

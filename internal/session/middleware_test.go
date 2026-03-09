@@ -3,6 +3,8 @@ package session
 import (
 	"context"
 	"testing"
+
+	core "github.com/webforspeed/bono-core"
 )
 
 type recordingFrontend struct {
@@ -16,6 +18,10 @@ func (f *recordingFrontend) HandleEvent(_ context.Context, _ Event) {
 func (f *recordingFrontend) RequestApproval(_ context.Context, _ ApprovalRequest) bool {
 	f.order = append(f.order, "base-approval")
 	return true
+}
+
+func (f *recordingFrontend) RequestSubAgentApproval(_ context.Context, _ core.SubAgentResult) core.SubAgentApprovalResponse {
+	return core.SubAgentApprovalResponse{Action: core.SubAgentApprove}
 }
 
 func TestChainMiddlewareOrder(t *testing.T) {
@@ -89,4 +95,8 @@ func (m middlewareFunc) HandleEvent(ctx context.Context, event Event) {
 
 func (m middlewareFunc) RequestApproval(ctx context.Context, req ApprovalRequest) bool {
 	return m.requestApproval(ctx, req)
+}
+
+func (m middlewareFunc) RequestSubAgentApproval(_ context.Context, _ core.SubAgentResult) core.SubAgentApprovalResponse {
+	return core.SubAgentApprovalResponse{Action: core.SubAgentApprove}
 }

@@ -1,6 +1,10 @@
 package session
 
-import "context"
+import (
+	"context"
+
+	core "github.com/webforspeed/bono-core"
+)
 
 type ApprovalKind string
 
@@ -25,4 +29,5 @@ type ApprovalRequest struct {
 type SessionFrontend interface {
 	HandleEvent(ctx context.Context, event Event)
 	RequestApproval(ctx context.Context, req ApprovalRequest) bool
+	RequestSubAgentApproval(ctx context.Context, result core.SubAgentResult) core.SubAgentApprovalResponse
 }

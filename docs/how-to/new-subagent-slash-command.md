@@ -5,6 +5,8 @@
 | What | Where |
 |------|-------|
 | SubAgent interface | `bono-core/subagent.go` |
+| SubAgentHook interface | `bono-core/subagent.go` |
+| Hook implementations | `bono-core/subagent_hooks.go` |
 | Subagent implementations | `bono-core/subagents.go` |
 | Versioned prompts | `bono-core/subagent_prompts/<name>/*.tmpl` |
 | SubAgent runner | `bono-core/agent.go` → `RunSubAgent()` |
@@ -48,13 +50,27 @@ var _ SubAgent = (*<name>Agent)(nil)
 
 ### 3. Register in `registerBuiltinSubAgents()`
 
-Add a line to `registerBuiltinSubAgents()` in `subagents.go`:
+Add to `registerBuiltinSubAgents()` in `subagents.go`. `RegisterSubAgent` accepts optional hooks:
 
 ```go
+// No hooks — subagent runs and hands off immediately:
 a.RegisterSubAgent(new<Name>Agent())
+
+// With persistence — output saved to ~/.bono/<cwd>/<name>/:
+a.RegisterSubAgent(new<Name>Agent(),
+    PersistHook("~/.bono/{cwd}/<name>s"),
+)
+
+// With persistence + approval gate (like the plan subagent):
+a.RegisterSubAgent(new<Name>Agent(),
+    PersistHook("~/.bono/{cwd}/<name>s"),
+    ApprovalHook(func() func(SubAgentResult) SubAgentApprovalResponse {
+        return a.OnSubAgentApproval
+    }),
+)
 ```
 
-This ensures every consumer of bono-core gets the subagent automatically.
+Hook order matters — PersistHook should come before ApprovalHook so the file path is available in the approval prompt.
 
 ### 4. Add the slash command in `bono/tui/slash_commands.go`
 
@@ -79,6 +95,8 @@ func handle<Name>(m *Model, arg string) tea.Cmd {
 }
 ```
 
+The `runSubAgent` dispatcher handles hook results automatically. If the subagent is registered with `ApprovalHook` and the user approves, `SubAgentDoneMsg.Approved=true` triggers `agent.Chat("Implement the plan.")` in the TUI — no extra handler code needed.
+
 ### 5. Update `helpText`
 
 Add the command to the `helpText` constant in `tui/slash_commands.go`.
@@ -88,3 +106,4 @@ Add the command to the `helpText` constant in `tui/slash_commands.go`.
 - `/<name>` appears in slash picker and `/help`
 - `/<name>` without args shows usage
 - `/<name> <task>` runs the subagent with correct tool restrictions
+- If hooks registered: output file created, approval prompt appears (if ApprovalHook used)

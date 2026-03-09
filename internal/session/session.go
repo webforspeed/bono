@@ -156,6 +156,9 @@ func (s *Session) Bind(ctx context.Context) {
 			Reason:  reason,
 		})
 	}
+	s.agent.OnSubAgentApproval = func(result core.SubAgentResult) core.SubAgentApprovalResponse {
+		return s.frontend.RequestSubAgentApproval(ctx, result)
+	}
 }
 
 func (s *Session) Reset() {

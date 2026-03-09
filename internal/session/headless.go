@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	core "github.com/webforspeed/bono-core"
 )
 
 // HeadlessFrontend renders Bono session events as an append-only terminal transcript.
@@ -126,6 +128,15 @@ func (f *HeadlessFrontend) RequestApproval(ctx context.Context, req ApprovalRequ
 	default:
 		return false
 	}
+}
+
+func (f *HeadlessFrontend) RequestSubAgentApproval(_ context.Context, result core.SubAgentResult) core.SubAgentApprovalResponse {
+	f.finishStreaming()
+	if path := result.Meta["output_path"]; path != "" {
+		fmt.Fprintf(f.out, "  ↳ Plan saved to %s\n", path)
+	}
+	// Headless mode auto-approves.
+	return core.SubAgentApprovalResponse{Action: core.SubAgentApprove}
 }
 
 func (f *HeadlessFrontend) startReasoning() {
