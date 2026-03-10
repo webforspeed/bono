@@ -19,6 +19,7 @@ A terminal coding agent frontend written in Go. Bono provides the fullscreen TUI
 - **Modes:** Fullscreen TUI by default, plus headless prompt mode via `bono -p "..."` / `bono --prompt "..."`.
 - **Slash:** Slash-command-first UX (`/init`, `/index`, `/model`, `/spinner`, `/clear`, `/help`, `/exit`)
 - **BYOK:** OpenRouter BYOK support via `OPENROUTER_API_KEY`
+- **Local Models:** Auto-discovers local Ollama models and exposes them in `/model`
 - **Search:** Semantic code search with vector indexing and repo stats in the status row
 - **Chunking:** AST-based chunking/indexing pipeline (powered by `bono-core`)
 - **Sandbox:** Default sandboxed command execution with approval fallbacks for unsandboxed runs
@@ -95,8 +96,38 @@ Installed binary usage:
 bono -p "Find and fix the bug in auth.py"
 ```
 
+## Model Providers (OpenRouter + Ollama)
+
+Bono supports both remote OpenRouter models and local Ollama models in the same `/model` picker.
+
+- OpenRouter models require `OPENROUTER_API_KEY`.
+- Ollama models are discovered from `http://127.0.0.1:11434/api/tags`.
+- Ollama chat requests use the OpenAI-compatible endpoint `http://127.0.0.1:11434/v1`.
+- You can switch between remote and local models at runtime with `/model`.
+
+### OpenRouter setup
+
+```bash
+export OPENROUTER_API_KEY="your-key"
+```
+
+### Ollama setup
+
+1. Install and run Ollama locally.
+2. Pull at least one model (example: `ollama pull qwen3-coder-next`).
+3. Start Bono and run `/model` to select an Ollama model.
+
+Optional: force local-by-default startup with environment variables:
+
+```bash
+export MODEL="qwen3-coder-next:latest"
+export BASE_URL="http://127.0.0.1:11434/v1"
+```
+
 ## Notes
-- `OPENROUTER_API_KEY` is required.
+- `OPENROUTER_API_KEY` is required only for remote OpenRouter models.
+- Ollama can be used without `OPENROUTER_API_KEY` when local models are available.
+- Detailed local setup guide: `docs/how-to/use-ollama-models.md`.
 - Set `SHELL_TIMEOUT_SEC` to change the default timeout for `run_shell` and `python_runtime` commands.
 - Bono status footer shows build mode/version: `Bono (dev)` for local builds and `Bono vX.Y.Z` for release builds.
 - Bono checks GitHub releases in the background and shows `new version available` in the footer for newer tags.

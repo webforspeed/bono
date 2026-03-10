@@ -14,6 +14,7 @@ All code changes related to hooks, terminal UX, session frontends, headless/TUI 
 - [How to create a new slash command](./docs/how-to/new-slash-command.md)
 - [How to add a new subagent slash command](./docs/how-to/new-subagent-slash-command.md)
 - [How to add a new hook](./docs/how-to/new-hook.md)
+- [How to use Ollama models](./docs/how-to/use-ollama-models.md)
 
 ### Reference
 > Information-oriented. Exact specifications, APIs, configs. etc
