@@ -92,16 +92,27 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Load model catalog from code.
-	models := tui.DefaultModelCatalog()
+	// Load model catalog from code, merging remote and local (Ollama) models.
+	ctx := context.Background()
+	models := tui.LoadModelCatalog(ctx)
 
-	// Model priority: MODEL env var (deprecated) > openrouter/free > first model in catalog > bono-core default
+	// Model priority: MODEL env var > openrouter/free (if API key set) > first local model > bono-core default
 	model := os.Getenv("MODEL")
 	if model == "" {
-		model = "openrouter/free"
-	}
-	if model == "" && len(models) > 0 {
-		model = models[0].ID
+		apiKey := os.Getenv("OPENROUTER_API_KEY")
+		if apiKey != "" {
+			model = "openrouter/free"
+		} else {
+			for _, m := range models {
+				if m.IsLocal {
+					model = m.ID
+					break
+				}
+			}
+			if model == "" {
+				model = "openrouter/free"
+			}
+		}
 	}
 	embeddingDims := 0
 	if n := os.Getenv("EMBEDDING_DIMS"); n != "" {
@@ -145,13 +156,7 @@ func main() {
 			config.MaxToolCallsPerTurn = v
 		}
 	} else {
-		config.MaxToolCallsPerTurn = 50
-	}
-
-	// Validate API key early
-	if config.APIKey == "" {
-		fmt.Println("Error: OPENROUTER_API_KEY required")
-		os.Exit(1)
+		config.MaxToolCallsPerTurn = 100
 	}
 
 	// Create agent

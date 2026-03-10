@@ -441,9 +441,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recalculateLayout()
 
 	case ModelSelectedMsg:
+		if !msg.Model.IsLocal && m.agent.APIKey() == "" {
+			m.AppendRawMessage(fmt.Sprintf("  ↳ Cannot use %s: OPENROUTER_API_KEY not set. Export it or add to .env file.", msg.Model.Name))
+			m.recalculateLayout()
+			break
+		}
 		m.agent.SetModel(msg.Model.ID)
 		m.sidebar.SetModelName(msg.Model.Name)
 		m.AppendRawMessage(fmt.Sprintf("  ↳ Switched to %s (%s)", msg.Model.Name, msg.Model.ID))
+		m.agent.SetBaseURL(msg.Model.BaseURL)
 		m.recalculateLayout()
 		modelID := msg.Model.ID
 		cmds = append(cmds, func() tea.Msg {

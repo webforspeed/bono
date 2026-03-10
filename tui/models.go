@@ -19,6 +19,10 @@ type ModelInfo struct {
 	Capabilities []string `json:"capabilities"`
 	Context      string   `json:"context"`
 	Tier         string   `json:"tier"`
+	// BaseURL is the API endpoint for this model. Every model should set this explicitly.
+	BaseURL string `json:"base_url,omitempty"`
+	// IsLocal indicates this is a locally hosted model.
+	IsLocal bool `json:"is_local,omitempty"`
 }
 
 // ModelSelectedMsg is sent when a model is selected from the picker.
