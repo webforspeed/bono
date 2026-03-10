@@ -31,7 +31,8 @@ const updateCheckTimeout = 3 * time.Second
 var version = "dev"
 
 type cliOptions struct {
-	Prompt string
+	Prompt        string
+	SkipApprovals bool
 }
 
 func (o cliOptions) Headless() bool {
@@ -45,6 +46,7 @@ func parseCLIArgs(args []string) (cliOptions, error) {
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&opts.Prompt, "p", "", "run a single prompt in headless mode")
 	fs.StringVar(&opts.Prompt, "prompt", "", "run a single prompt in headless mode")
+	fs.BoolVar(&opts.SkipApprovals, "skip-approvals", false, "skip all approval prompts and execution limits")
 
 	if err := fs.Parse(args); err != nil {
 		return cliOptions{}, err
@@ -158,6 +160,18 @@ func main() {
 	} else {
 		config.MaxToolCallsPerTurn = 100
 	}
+	config.MaxChatTurns = 100
+	config.MaxPreTaskTurns = 100
+	config.MaxSubAgentTurns = 100
+	if opts.SkipApprovals {
+		config.DisableLimits = true
+		config.MaxToolCallsPerTurn = 0
+		config.MaxChatTurns = 0
+		config.MaxPreTaskTurns = 0
+		config.MaxSubAgentTurns = 0
+		config.HTTPTimeout = 0
+		config.Sandbox.CommandTimeout = -1
+	}
 
 	// Create agent
 	agent, err := core.NewAgent(config)
@@ -220,7 +234,7 @@ func main() {
 		return
 	}
 
-	if err := runTUI(ctx, cwd, version, models, config, agent, dispatcher); err != nil {
+	if err := runTUI(ctx, cwd, version, models, config, agent, dispatcher, opts); err != nil {
 		fmt.Printf("Error running TUI: %v\n", err)
 		os.Exit(1)
 	}
@@ -232,8 +246,9 @@ func runHeadless(ctx context.Context, cwd string, config core.Config, agent *cor
 		session.SynchronizedMiddleware(),
 	)
 	sess := session.New(agent, dispatcher, session.Config{
-		CWD:         cwd,
-		ShellPolicy: config.ShellPolicy,
+		CWD:           cwd,
+		ShellPolicy:   config.ShellPolicy,
+		SkipApprovals: opts.SkipApprovals,
 	}, frontend)
 	dispatcher.On(hooks.Stop, sess.StopHandler())
 	sess.Bind(ctx)
@@ -241,7 +256,7 @@ func runHeadless(ctx context.Context, cwd string, config core.Config, agent *cor
 	return err
 }
 
-func runTUI(ctx context.Context, cwd, version string, models []tui.ModelInfo, config core.Config, agent *core.Agent, dispatcher *hooks.Dispatcher) error {
+func runTUI(ctx context.Context, cwd, version string, models []tui.ModelInfo, config core.Config, agent *core.Agent, dispatcher *hooks.Dispatcher, opts cliOptions) error {
 	tuiModel := tui.NewWithOptions(agent, ctx, tui.SpinnerDot, models)
 	tuiModel.SetStatusBarText(tui.StatusBarText(version))
 	tuiModel.SetDispatcher(dispatcher)
@@ -274,8 +289,9 @@ func runTUI(ctx context.Context, cwd, version string, models []tui.ModelInfo, co
 		session.SynchronizedMiddleware(),
 	)
 	sess := session.New(agent, dispatcher, session.Config{
-		CWD:         cwd,
-		ShellPolicy: config.ShellPolicy,
+		CWD:           cwd,
+		ShellPolicy:   config.ShellPolicy,
+		SkipApprovals: opts.SkipApprovals,
 	}, frontend)
 	dispatcher.On(hooks.Stop, sess.StopHandler())
 	tuiModel.SetOnSessionClear(sess.Reset)

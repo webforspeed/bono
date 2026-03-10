@@ -10,8 +10,9 @@ import (
 )
 
 type Config struct {
-	CWD         string
-	ShellPolicy core.ShellPolicy
+	CWD           string
+	ShellPolicy   core.ShellPolicy
+	SkipApprovals bool
 }
 
 // Session owns frontend-neutral agent callback wiring and per-session change tracking.
@@ -57,6 +58,14 @@ func (s *Session) Bind(ctx context.Context) {
 			req := core.ShellRequestFromToolArgs(name, args)
 			decision := core.DecideShellRequest(s.config.ShellPolicy, req)
 			if decision.Route == core.ShellRouteHostDirect {
+				if s.config.SkipApprovals {
+					s.frontend.HandleEvent(ctx, ToolCallEvent{
+						Name:            name,
+						Args:            args,
+						ExecutionReason: decision.Reason,
+					})
+					return true
+				}
 				s.dispatcher.Fire(ctx, hooks.PermissionRequest, hooks.PermissionPayload{ToolName: name, Args: args})
 				return s.frontend.RequestApproval(ctx, ApprovalRequest{
 					Kind:            ApprovalTool,
@@ -71,6 +80,10 @@ func (s *Session) Bind(ctx context.Context) {
 				return true
 			}
 
+			if s.config.SkipApprovals {
+				s.frontend.HandleEvent(ctx, ToolCallEvent{Name: name, Args: args})
+				return true
+			}
 			s.dispatcher.Fire(ctx, hooks.PermissionRequest, hooks.PermissionPayload{ToolName: name, Args: args})
 			return s.frontend.RequestApproval(ctx, ApprovalRequest{
 				Kind:     ApprovalTool,
@@ -79,6 +92,10 @@ func (s *Session) Bind(ctx context.Context) {
 			})
 		}
 
+		if s.config.SkipApprovals {
+			s.frontend.HandleEvent(ctx, ToolCallEvent{Name: name, Args: args})
+			return true
+		}
 		s.dispatcher.Fire(ctx, hooks.PermissionRequest, hooks.PermissionPayload{ToolName: name, Args: args})
 		return s.frontend.RequestApproval(ctx, ApprovalRequest{
 			Kind:     ApprovalTool,
@@ -150,6 +167,9 @@ func (s *Session) Bind(ctx context.Context) {
 		s.frontend.HandleEvent(ctx, ResponseModelEvent{ModelID: model})
 	}
 	s.agent.OnSandboxFallback = func(command string, reason string) bool {
+		if s.config.SkipApprovals {
+			return true
+		}
 		return s.frontend.RequestApproval(ctx, ApprovalRequest{
 			Kind:    ApprovalSandboxFallback,
 			Command: command,
@@ -157,6 +177,9 @@ func (s *Session) Bind(ctx context.Context) {
 		})
 	}
 	s.agent.OnSubAgentApproval = func(result core.SubAgentResult) core.SubAgentApprovalResponse {
+		if s.config.SkipApprovals {
+			return core.SubAgentApprovalResponse{Action: core.SubAgentApprove}
+		}
 		return s.frontend.RequestSubAgentApproval(ctx, result)
 	}
 }
@@ -177,6 +200,10 @@ func (s *Session) StopHandler() hooks.Handler {
 				OldContent: change.BeforeContent,
 				NewContent: change.AfterContent,
 			})
+		}
+		if s.config.SkipApprovals {
+			s.frontend.HandleEvent(ctx, RefreshGitStatusEvent{})
+			return
 		}
 
 		ok := s.frontend.RequestApproval(ctx, ApprovalRequest{

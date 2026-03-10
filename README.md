@@ -17,6 +17,7 @@ A terminal coding agent frontend written in Go. Bono provides the fullscreen TUI
 
 ## Features
 - **Modes:** Fullscreen TUI by default, plus headless prompt mode via `bono -p "..."` / `bono --prompt "..."`.
+- **Automation flag:** `--skip-approvals` disables approval prompts and runtime limits for fully unattended runs.
 - **Slash:** Slash-command-first UX (`/init`, `/index`, `/model`, `/spinner`, `/clear`, `/help`, `/exit`)
 - **BYOK:** OpenRouter BYOK support via `OPENROUTER_API_KEY`
 - **Local Models:** Auto-discovers local Ollama models and exposes them in `/model`
@@ -96,6 +97,12 @@ Installed binary usage:
 bono -p "Find and fix the bug in auth.py"
 ```
 
+Run without approval prompts or runtime limits:
+
+```bash
+bono --skip-approvals
+```
+
 ## Model Providers (OpenRouter + Ollama)
 
 Bono supports both remote OpenRouter models and local Ollama models in the same `/model` picker.
@@ -129,6 +136,8 @@ export BASE_URL="http://127.0.0.1:11434/v1"
 - Ollama can be used without `OPENROUTER_API_KEY` when local models are available.
 - Detailed local setup guide: `docs/how-to/use-ollama-models.md`.
 - Set `SHELL_TIMEOUT_SEC` to change the default timeout for `run_shell` and `python_runtime` commands.
+- `--skip-approvals` auto-approves tool, sandbox fallback, change-batch, and subagent plan approvals in both TUI and headless mode.
+- `--skip-approvals` also removes guardrails like turn limits and tool-call limits; use only in trusted environments.
 - Bono status footer shows build mode/version: `Bono (dev)` for local builds and `Bono vX.Y.Z` for release builds.
 - Bono checks GitHub releases in the background and shows `new version available` in the footer for newer tags.
 - Set `BONO_DISABLE_UPDATE_CHECK=1` to skip update checks.
