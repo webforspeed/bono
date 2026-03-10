@@ -30,3 +30,34 @@ func TestParseCLIArgsEmptyPromptIsNotHeadless(t *testing.T) {
 		t.Fatalf("Headless() = true, want false")
 	}
 }
+
+func TestParseCLIArgsSkipApprovals(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{
+			name: "default false",
+			args: []string{},
+			want: false,
+		},
+		{
+			name: "flag enabled",
+			args: []string{"--skip-approvals"},
+			want: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			opts, err := parseCLIArgs(tc.args)
+			if err != nil {
+				t.Fatalf("parseCLIArgs returned error: %v", err)
+			}
+			if opts.SkipApprovals != tc.want {
+				t.Fatalf("SkipApprovals = %v, want %v", opts.SkipApprovals, tc.want)
+			}
+		})
+	}
+}
