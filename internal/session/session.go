@@ -209,7 +209,7 @@ func (s *Session) RunPrompt(ctx context.Context, prompt string) (string, error) 
 
 func isReadOnlyTool(name string) bool {
 	switch name {
-	case "read_file", "compact_context", "code_search", "WebSearch", "WebFetch":
+	case "read_file", "compact_context", "code_search", "WebSearch", "WebFetch", "enter_plan_mode":
 		return true
 	default:
 		return false

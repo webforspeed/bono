@@ -68,6 +68,12 @@ func FormatTool(name string, args map[string]any) string {
 			return fmt.Sprintf("WebFetch('%s', '%s')", url, question)
 		}
 		return fmt.Sprintf("WebFetch('%s')", url)
+	case "enter_plan_mode":
+		desc, _ := args["project_description"].(string)
+		if len(desc) > 50 {
+			desc = desc[:50] + "..."
+		}
+		return fmt.Sprintf("EnterPlanMode('%s')", desc)
 	default:
 		return name
 	}

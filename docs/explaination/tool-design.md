@@ -72,7 +72,7 @@ Each tool declares its default policy via `AutoApprove(sandboxed bool)`:
 
 | Tool | AutoApprove |
 |------|-------------|
-| `read_file`, `compact_context` | always true |
+| `read_file`, `compact_context`, `enter_plan_mode` | always true |
 | `run_shell`, `python_runtime` | true when sandboxed |
 | `write_file`, `edit_file` | always false |
 
