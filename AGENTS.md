@@ -56,7 +56,7 @@ All code changes related to hooks, terminal UX, session frontends, headless/TUI 
 
 - Semantic code search using vector indexing tool
 - web mode
-- plan mode tool
+- ~~plan mode tool~~ (shipped — `enter_plan_mode` tool + `/plan` slash command)
 - askusequestion tool
 - todo write tool
 - guardrails like forceful compaction on certain conditions

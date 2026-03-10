@@ -17,6 +17,15 @@ bono (frontend)                    bono-core (agent harness)
                                    └─────────────────────────┘
 ```
 
+### Entry Points
+
+There are two ways to invoke the plan subagent:
+
+1. **Slash command** (`/plan <task>`) — the TUI/headless frontend dispatches directly to `Agent.RunSubAgent()`.
+2. **`enter_plan_mode` tool** — the LLM can autonomously decide to plan by calling this tool. The tool is registered in `NewAgent()` with a closure that looks up the `"plan"` subagent and calls `RunSubAgent()`. It is always auto-approved since planning is read-only; approval gates are handled by the subagent's hooks.
+
+The tool approach means the agent can enter planning mode mid-conversation without explicit user commands — the model decides when a task is complex enough to warrant planning.
+
 ## Key Components
 
 ### SubAgent Interface (bono-core)
@@ -70,9 +79,10 @@ bono-core/
 ├── subagent.go              // SubAgent interface, SubAgentHook, SubAgentResult
 ├── subagent_hooks.go        // PersistHook, ApprovalHook, slugify
 ├── subagents.go             // Built-in implementations + registerBuiltinSubAgents()
+├── tool_enter_plan_mode.go  // enter_plan_mode tool (LLM-initiated planning)
 └── subagent_prompts/
     └── plan/
-        └── v1.0.0.tmpl      // system prompt, embedded via //go:embed
+        └── v1.1.0.tmpl      // system prompt, embedded via //go:embed
 ```
 
 This mirrors bono's `prompts/versions/*.tmpl` pattern. Prompts are versioned in git and can be revised independently of code changes.

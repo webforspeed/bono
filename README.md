@@ -32,15 +32,19 @@ A terminal coding agent frontend written in Go. Bono provides the fullscreen TUI
 - **Planning:** Dedicated planning subagent mode (`/plan`) for thinking through architecture and breaking down tasks before writing code
 
 ## Tools
-- `read_file`: read file contents
-- `write_file`: write full file contents
-- `edit_file`: apply focused file edits
-- `run_shell`: run shell commands (sandbox-aware)
-- `python_runtime`: execute Python snippets (sandbox-aware)
-- `code_search`: semantic/hybrid/exact code search
-- `web_search`: live web search — returns ranked URLs (search mode) or synthesized answer with citations (answer mode); auto-classified if mode omitted
-- `web_fetch`: fetch and summarize a URL, optionally focused on a specific question
-- `compact_context`: compact long conversation context
+
+| Tool | What it does |
+|------|-------------|
+| `read_file` | Read any file in the project |
+| `write_file` | Create or overwrite a file |
+| `edit_file` | Apply targeted edits to specific sections of a file |
+| `run_shell` | Run shell commands in a sandbox (falls back to approval if unsandboxed) |
+| `python_runtime` | Execute Python snippets for data processing, scripting, and multi-step workflows |
+| `code_search` | Semantic, hybrid, and exact code search across the indexed codebase |
+| `web_search` | Search the web — returns ranked URLs or a synthesized answer with citations |
+| `web_fetch` | Fetch and summarize a URL, optionally focused on a specific question |
+| `compact_context` | Summarize conversation history to free up context window |
+| `enter_plan_mode` | Launch a planning subagent to think through architecture and produce a structured plan before coding |
 
 ## Install (GitHub Releases)
 Install the latest release with:

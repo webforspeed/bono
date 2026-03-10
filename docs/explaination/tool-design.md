@@ -63,6 +63,7 @@ Tools that need agent capabilities take function parameters — the agent provid
 
 - `RunShellTool(exec)` and `PythonRuntimeTool(exec)` receive a shell executor that wraps sandbox + fallback
 - `CompactContextTool(compact)` receives the agent's `compactMessages` method
+- `EnterPlanModeTool(runSubAgent)` receives a closure that looks up the `"plan"` subagent and calls `Agent.RunSubAgent()`. The closure captures the agent pointer, so hook callbacks (like `OnSubAgentApproval`) resolve at call time.
 
 This keeps all tools uniform from the registry's perspective while allowing per-tool dependencies.
 
@@ -90,6 +91,7 @@ Bono's session layer in `internal/session/session.go` makes the final decision �
 1. `bono-core/types.go` (`ToolDef` struct)
 2. `bono-core/registry.go`
 3. `bono-core/tool_*.go` (any one tool file for the pattern)
-4. `bono-core/agent.go` (`NewAgent` registry setup + `Chat` dispatch)
-5. `bono/internal/session/session.go` (`OnToolCall`, `OnToolDone`, `OnSandboxFallback`)
-6. `bono/internal/session/display.go` (shared tool formatting)
+4. `bono-core/tool_enter_plan_mode.go` (subagent-backed tool — shows dependency injection with `runSubAgent` closure)
+5. `bono-core/agent.go` (`NewAgent` registry setup + `Chat` dispatch)
+6. `bono/internal/session/session.go` (`OnToolCall`, `OnToolDone`, `OnSandboxFallback`)
+7. `bono/internal/session/display.go` (shared tool formatting)
